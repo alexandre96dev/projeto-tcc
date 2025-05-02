@@ -4,8 +4,8 @@ from langchain_community.chat_models import ChatLiteLLM
 from custom_pit import VerificarPalavraNoPDFTool
 
 client =  LLM(
-    model='ollama/llama3.1',
-    api_base='http://localhost:11434'
+    model='openai/gpt-4',
+    api_key='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'
 )
 
 verificar_palavra_no_pdf = VerificarPalavraNoPDFTool()
@@ -28,7 +28,6 @@ planner = Agent(
     llm=client,
 )
 
-# Agentes de Pesquisa para cada seção
 research_agents = {
     "teaching": Agent(
         name="Pesquisador de Ensino",
@@ -77,7 +76,6 @@ research_agents = {
     )
 }
 
-# Agente de Escrita
 writer = Agent(
     name="Redator Acadêmico",
     role="Responsável pela Redação do Relatório Final",
@@ -90,9 +88,27 @@ writer = Agent(
     llm=client
 )
 
-# ===================== TAREFAS =====================
 
-# Tarefa de Planejamento
+
+reviewer_research = Agent(
+    name="Revisor de Pesquisa",
+    role="Supervisor das Análises de Ensino, Pesquisa, Extensão e Administração",
+    goal="Revisar e validar os resumos das seções para garantir fidelidade e clareza.",
+    backstory="Especialista em revisão técnica e integridade acadêmica.",
+    verbose=True,
+    llm=client
+)
+
+reviewer_report = Agent(
+    name="Revisor de Relatório",
+    role="Revisor do Relatório Acadêmico Final",
+    goal="Verificar coesão, estrutura e conformidade acadêmica do relatório final.",
+    backstory="Especialista em revisão editorial acadêmica.",
+    verbose=True,
+    llm=client
+)
+
+
 planning_task = Task(
     description=dedent("""
         Analisar o Plano Individual de Trabalho no diretório './Planejamento/PIT.pdf'.
@@ -110,13 +126,12 @@ planning_task = Task(
     tools=[verificar_palavra_no_pdf]
 )
 
-# Tarefas de Pesquisa para cada seção
 research_tasks = []
 sections = {
     "teaching": "./ENSINO/ensino.txt",
     "research": "./PESQUISA/pesquisa.txt",
     "extension": "./EXTENSAO/extensao.txt",
-    "admin": "./ADMIN/admin.txt"
+    "admin": "./ADMINISTRATIVO_PEDAGOGICO/admin.txt"
 }
 for section, file_path in sections.items():
     research_tasks.append(Task(
@@ -131,7 +146,24 @@ for section, file_path in sections.items():
         tools=[verificar_palavra_no_pdf]
     ))
 
-# Tarefa de Escrita
+
+# Tarefa de Revisão dos Pesquisadores
+review_research_task = Task(
+    description=dedent("""
+        Revisar os arquivos:
+        - `Relatorio_Final/teaching.txt`
+        - `Relatorio_Final/research.txt`
+        - `Relatorio_Final/extension.txt`
+        - `Relatorio_Final/admin.txt`
+        Verificar clareza, fidelidade às fontes e coerência com o PIT.
+        Ajustar se necessário.
+    """),
+    expected_output="Arquivos revisados e prontos para o redator final.",
+    agent=reviewer_research,
+    tools=[verificar_palavra_no_pdf]
+)
+
+
 writing_task = Task(
     description=dedent("""
         Compilar as informações extraídas das seguintes fontes:
@@ -149,9 +181,22 @@ writing_task = Task(
     tools=[]
 )
 
+
+# Tarefa de Revisão Final do Relatório
+review_final_report_task = Task(
+    description=dedent("""
+        Ler o relatório em `Relatorio_Final/relatorio_academico.md`.
+        Verificar estrutura, coesão, clareza e conformidade com as informações analisadas.
+        Corrigir e salvar a versão final no mesmo arquivo.
+    """),
+    expected_output="Relatório final revisado em `Relatorio_Final/relatorio_academico.md`.",
+    agent=reviewer_report,
+    tools=[]
+)
+
 crew = Crew(
-    agents=[planner, *research_agents.values(), writer],
-    tasks=[planning_task, *research_tasks, writing_task],
+    agents=[planner, *research_agents.values(), writer, reviewer_research, reviewer_report],
+    tasks=[planning_task, *research_tasks, writing_task, review_research_task, review_final_report_task],
     process=Process.sequential,
     verbose=True,
     llm=client
