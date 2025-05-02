@@ -116,7 +116,7 @@ sections = {
     "teaching": "./ENSINO/ensino.txt",
     "research": "./PESQUISA/pesquisa.txt",
     "extension": "./EXTENSAO/extensao.txt",
-    "admin": "./ADMIN/admin.txt"
+    "admin": "./ADMINISTRATIVO_PEDAGOGICO/admin.txt"
 }
 for section, file_path in sections.items():
     research_tasks.append(Task(
