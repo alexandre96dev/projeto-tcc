@@ -1,0 +1,2 @@
+Texto completo extraído e resumido das atividades de extensão, pronto para ser utilizado no relatório, foi salvo no arquivo 'Relatorio_Final/extension.txt'.
+```
