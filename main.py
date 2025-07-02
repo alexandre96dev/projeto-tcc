@@ -1,11 +1,10 @@
 from crewai import Agent, Task, LLM, Crew, Process
 from textwrap import dedent
-from langchain_community.chat_models import ChatLiteLLM
 from custom_pit import VerificarPalavraNoPDFTool
 
 # Configuração do LLM
 client = LLM(
-    model='openai/gpt-3.5-turbo',
+    model='openai/gpt-4-turbo',
     api_key='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'
 )
 
@@ -35,10 +34,7 @@ research_agents = {
         name="Pesquisador de Ensino",
         role="Analista Detalhista de Atividades Acadêmicas e Pedagógicas",
         goal=(
-            "Investigar minuciosamente os documentos fornecidos no diretório de ENSINO, "
-            "extraindo dados específicos sobre carga horária, ementas, metodologias didáticas, "
-            "projetos pedagógicos e o impacto direto nas turmas e na formação dos alunos. "
-            "O resumo deve ser factual, detalhado e conciso."
+            "Investigar minuciosamente os documentos fornecidos no diretório de ENSINO."
         ),
         backstory="Um veterano em educação, com expertise em pedagogia e análise de currículos. Seu foco é desvendar a essência das atividades de ensino e seu real impacto.",
         verbose=True,
@@ -61,10 +57,7 @@ research_agents = {
         name="Pesquisador de Extensão",
         role="Analista de Projetos de Extensão Universitária e Engajamento Comunitário",
         goal=(
-            "Analisar detalhadamente os documentos relacionados às atividades de EXTENSÃO, "
-            "identificando projetos de extensão realizados, parcerias com a comunidade/instituições, "
-            "o público beneficiado, resultados alcançados e o impacto social das ações. "
-            "Busque evidências do engajamento e transformação."
+            "Analisar detalhadamente os documentos relacionados às atividades de EXTENSÃO."
         ),
         backstory="Com um histórico em projetos sociais e universitários, este agente é perito em traduzir as ações de extensão em narrativas de impacto real na comunidade.",
         verbose=True,
@@ -74,10 +67,7 @@ research_agents = {
         name="Pesquisador Administrativo",
         role="Analista de Processos Administrativo-Pedagógicos e Governança Acadêmica",
         goal=(
-            "Investigar e extrair informações cruciais sobre atividades administrativas e pedagógicas, "
-            "incluindo participação em colegiados e comissões, gestão de cursos, organização de eventos institucionais, "
-            "desenvolvimento de políticas acadêmicas e outras contribuições para a governança universitária. "
-            "Destaque a contribuição para a estrutura e funcionamento da instituição."
+            "Investigar e extrair informações cruciais sobre atividades administrativas e pedagógicas"
         ),
         backstory="Um especialista em gestão universitária, capaz de identificar a relevância das atividades administrativas no panorama acadêmico geral. Ele organiza as contribuições que mantêm a instituição funcionando.",
         verbose=True,
@@ -167,7 +157,7 @@ planning_task = Task(
         - Atividades de Extensão
         - Atividades Administrativo-Pedagógicas
         - Complemento/Observações
-        Organize essas informações de forma estruturada, com listas claras ou tópicos, no arquivo `Relatorio_Final/planejamento.txt`.
+        Organize essas informações de forma estruturada, com listas claras ou tópicos e crie o arquivo `Relatorio_Final/planejamento.txt` com as informações coletadas. Não invente informações
         **O formato deve ser limpo e fácil de ler, servindo como um índice de promessas.**
     """),
     expected_output="Arquivo `./Relatorio_Final/planejamento.txt` contendo as promessas do PIT organizadas de forma estruturada por seção, prontas para cruzamento com o relatório.",
@@ -179,46 +169,50 @@ planning_task = Task(
 
 research_tasks = []
 sections = {
-    "teaching": "./ENSINO/ensino.txt",
-    "research": "./PESQUISA/pesquisa.txt",
-    "extension": "./EXTENSAO/extensao.txt",
-    "admin": "./ADMINISTRATIVO_PEDAGOGICO/admin.txt"
+    "teaching": "./ENSINO/ensino.pdf",
+    "research": "./PESQUISA/pesquisa.pdf",
+    "extension": "./EXTENSAO/extensao.pdf",
+    "admin": "./ADMINISTRATIVO_PEDAGOGICO/admin.pdf"
 }
 
 for section, file_path in sections.items():
     research_tasks.append(Task(
         description=dedent(f"""
-            Examine o documento '{file_path}' (ou o conteúdo relevante, se o arquivo for um placeholder).
-            Sua tarefa é **extrair e resumir as informações mais relevantes e quantificáveis** para a seção de {section.upper()}.
-            Foco em:
-            - **Ensino:** Carga horária, disciplinas, metodologias, projetos pedagógicos, número de alunos/turmas, resultados de avaliação.
-            - **Pesquisa:** Títulos de projetos, publicações (com local/data), eventos (participação/apresentação), financiamentos, resultados chave.
-            - **Extensão:** Nomes de projetos, parcerias, número de beneficiados, resultados sociais, eventos comunitários.
-            - **Administrativo:** Comissões/colegiados (com papel), participação em eventos de gestão, ações de organização acadêmica, desenvolvimento de políticas.
-            O resumo deve ser objetivo, factual e conter apenas as informações essenciais para a composição do relatório. Salve o resumo no arquivo `Relatorio_Final/{section}.txt`.
+            Leia o documento '{file_path}'. Caso ele esteja vazio, escreva APENAS: 'Sem informações fornecidas para esta seção'.
+            Caso haja informações, extraia e resuma os dados mais relevantes e quantificáveis para a seção de {section.upper()}.
+            NÃO invente ou complemente dados! O resumo deve ser estritamente baseado no conteúdo do arquivo.
+            Salve o resumo em Relatorio_Final/{section}.txt.
         """),
-        expected_output=f"Arquivo `Relatorio_Final/{section}.txt` contendo um resumo factual e detalhado das atividades de {section}, pronto para ser usado na redação do relatório.",
+        expected_output=f"Arquivo Relatorio_Final/{section}.txt com um resumo factual ESTRITAMENTE com base no arquivo fonte, ou 'Sem informações fornecidas para esta seção'.",
         agent=research_agents[section],
         output_file=f"Relatorio_Final/{section}.txt",
-        tools=[verificar_palavra_no_pdf] 
+        tools=[verificar_palavra_no_pdf]
     ))
 
 writing_task = Task(
     description=dedent("""
-        Sua missão é criar o relatório acadêmico final. Compile e sintetize as informações das seguintes fontes:
-        - O planejamento das promessas do PIT: `Relatorio_Final/planejamento.txt`
-        - Os resumos das atividades de ensino: `Relatorio_Final/teaching.txt`
-        - Os resumos das atividades de pesquisa: `Relatorio_Final/research.txt`
-        - Os resumos das atividades de extensão: `Relatorio_Final/extension.txt`
-        - Os resumos das atividades administrativo-pedagógicas: `Relatorio_Final/admin.txt`
-        Cruze todos esses dados com as metas e atividades propostas no PIT, elaborando um relatório acadêmico **coeso, bem estruturado, formal e formatado em Markdown**.
-        O relatório deve incluir:
-        - Uma introdução que contextualize o período e o objetivo do relatório.
-        - Seções claras para Ensino, Pesquisa, Extensão e Administrativo-Pedagógicas, cada uma detalhando as atividades realizadas e fazendo referência explícita (se possível) às promessas do PIT.
-        - Uma seção de Conclusão/Considerações Finais, que resuma as principais conquistas e talvez futuras projeções.
-        Assegure uma linguagem acadêmica e profissional, evitando jargões excessivos e mantendo a fluidez. Salve o relatório final em `Relatorio_Final/relatorio_academico.md`.
+        Sua missão é compilar o relatório acadêmico final, ESTRITAMENTE com base nos seguintes arquivos já gerados:
+        - Relatorio_Final/planejamento.txt
+        - Relatorio_Final/teaching.txt
+        - Relatorio_Final/research.txt
+        - Relatorio_Final/extension.txt
+        - Relatorio_Final/admin.txt
+
+        Para cada seção (Ensino, Pesquisa, Extensão, Administrativo), só insira informações que estejam nos arquivos correspondentes. 
+        Caso algum arquivo contenha a frase 'Sem informações fornecidas para esta seção', inclua esse aviso na respectiva seção do relatório.
+
+        NÃO invente, complemente ou deduza informações de nenhum outro lugar. Sua função é apenas organizar e compilar.
+
+        Estruture o relatório em Markdown, com:
+        - Introdução breve contextualizando o período do relatório.
+        - Seções separadas para Ensino, Pesquisa, Extensão e Administrativo-Pedagógico, contendo o conteúdo dos respectivos arquivos, sem alterações ou inferências.
+        - Uma conclusão, que apenas sumariza a entrega dos arquivos, sem criar análises além do que está presente.
+
+        Atenção: Se qualquer seção estiver sem dados, escreva explicitamente 'Sem informações reportadas nesta seção'.
+
+        Salve o relatório final em Relatorio_Final/relatorio_academico.md.
     """),
-    expected_output="Arquivo `Relatorio_Final/relatorio_academico.md` contendo o relatório acadêmico final completo, estruturado em Markdown, coerente e formal.",
+    expected_output="Arquivo Relatorio_Final/relatorio_academico.md contendo o relatório acadêmico final, sem dados inventados, apenas compilados dos arquivos das seções.",
     agent=writer,
     output_file="Relatorio_Final/relatorio_academico.md",
     tools=[]
@@ -226,39 +220,40 @@ writing_task = Task(
 
 review_final_report_task = Task(
     description=dedent("""
-        Realize uma revisão editorial e estrutural abrangente do relatório em `Relatorio_Final/relatorio_academico.md`.
-        Seu foco é garantir:
-        - **Coesão e Fluxo:** A transição suave entre seções e parágrafos.
-        - **Estrutura:** A correta aplicação das seções, subseções e formatação Markdown.
-        - **Clareza:** A ausência de ambiguidades e a facilidade de compreensão do texto.
-        - **Conformidade Acadêmica:** O respeito às normas de escrita acadêmica e à linguagem formal.
-        - **Consistência:** Que as informações apresentadas no relatório final sejam consistentes com os resumos das seções e o planejamento do PIT.
-        **Corrija quaisquer erros gramaticais, ortográficos ou de pontuação restantes.** Otimize a fraseologia para concisão e impacto. Salve a versão final corrigida no mesmo arquivo.
+        Revise o relatório final em Relatorio_Final/relatorio_academico.md.
+        - Garanta que a estrutura, formatação Markdown e linguagem estejam corretas e formais.
+        - Não adicione conteúdo novo; apenas melhore a apresentação textual e formatação.
+        - Assegure que, se houver seção sem dados, o texto 'Sem informações reportadas nesta seção' esteja presente e visível.
+
+        Faça correções linguísticas, ortográficas e de formatação, mas NÃO invente informações ou modifique o conteúdo factual.
+        Salve o arquivo revisado no mesmo local.
     """),
-    expected_output="Relatório final revisado e impecável em `Relatorio_Final/relatorio_academico.md`, pronto para ser avaliado.",
+    expected_output="Relatório final revisado e impecável em Relatorio_Final/relatorio_academico.md, sem alterar informações.",
     agent=reviewer_report,
     tools=[]
 )
 
 textual_review_task = Task(
     description=dedent("""
-        Sua tarefa é realizar uma análise crítica da qualidade linguística e textual de **TODOS** os seguintes arquivos:
-        - `Relatorio_Final/planejamento.txt`
-        - `Relatorio_Final/teaching.txt`
-        - `Relatorio_Final/research.txt`
-        - `Relatorio_Final/extension.txt`
-        - `Relatorio_Final/admin.txt`
-        - `Relatorio_Final/relatorio_academico.md`
+        Avalie TODOS os seguintes arquivos:
+        - Relatorio_Final/planejamento.txt
+        - Relatorio_Final/teaching.txt
+        - Relatorio_Final/research.txt
+        - Relatorio_Final/extension.txt
+        - Relatorio_Final/admin.txt
+        - Relatorio_Final/relatorio_academico.md
 
-        Para cada arquivo, avalie rigorosamente os seguintes aspectos:
-        - **Clareza Textual:** O texto é fácil de entender? As ideias são apresentadas de forma direta?
-        - **Coesão e Fluidez:** As frases e parágrafos se conectam logicamente? Há transições suaves?
-        - **Correção Gramatical e Ortográfica:** Identifique quaisquer erros de gramática, pontuação ou ortografia.
-        - **Adequação ao Estilo Acadêmico:** O tom é formal e objetivo? Há uso apropriado de terminologia? Evita informalidades ou jargões desnecessários?
+        Para cada arquivo, comente obrigatoriamente:
+        - Clareza textual
+        - Coesão e fluidez
+        - Correção gramatical
+        - Adequação acadêmica
 
-        Gere um relatório de avaliação detalhado em **Markdown**, descrevendo as observações para cada arquivo e apontando **oportunidades específicas de melhoria**. Inclua exemplos de trechos problemáticos e sugestões de reescrita. Salve este relatório em `Relatorio_Final/avaliacao_textual.md`.
+        Mesmo que algum arquivo esteja vazio ou contenha apenas a mensagem 'Sem informações fornecidas para esta seção', faça uma nota sobre isso.
+
+        Gere um relatório detalhado em Markdown, incluindo sugestões de melhoria, mesmo que seja apenas para indicar que não há conteúdo a avaliar. Salve como Relatorio_Final/avaliacao_textual.md.
     """),
-    expected_output="Arquivo `Relatorio_Final/avaliacao_textual.md` com um relatório detalhado em Markdown, contendo as avaliações linguísticas e sugestões para cada arquivo analisado.",
+    expected_output="Arquivo Relatorio_Final/avaliacao_textual.md com avaliação linguística de TODOS os arquivos, mesmo que estejam vazios.",
     agent=evaluator_textual,
     output_file="Relatorio_Final/avaliacao_textual.md",
     tools=[verificar_palavra_no_pdf]
@@ -266,26 +261,25 @@ textual_review_task = Task(
 
 academic_metrics_task = Task(
     description=dedent("""
-        Com base na análise comparativa dos seguintes arquivos:
-        - O planejamento detalhado do PIT: `Relatorio_Final/planejamento.txt`
-        - Os resumos das atividades de ensino: `Relatorio_Final/teaching.txt`
-        - Os resumos das atividades de pesquisa: `Relatorio_Final/research.txt`
-        - Os resumos das atividades de extensão: `Relatorio_Final/extension.txt`
-        - Os resumos das atividades administrativo-pedagógicas: `Relatorio_Final/admin.txt`
-        - O relatório acadêmico final gerado: `Relatorio_Final/relatorio_academico.md`
+        Avalie a aderência do relatório final ao PIT, ESTRITAMENTE com base no conteúdo dos arquivos:
+        - Relatorio_Final/planejamento.txt
+        - Relatorio_Final/teaching.txt
+        - Relatorio_Final/research.txt
+        - Relatorio_Final/extension.txt
+        - Relatorio_Final/admin.txt
+        - Relatorio_Final/relatorio_academico.md
 
-        Sua tarefa é produzir uma avaliação estruturada da **aderência do relatório final ao PIT**, seguindo os critérios abaixo.
-        A avaliação deve ser detalhada, com justificativas e, quando possível, quantificações (e.g., escalas, porcentagens).
+        NÃO invente dados nem crie justificativas além do que está explicitamente presente nos arquivos.
 
-        1.  **Cobertura de Metas (por Seção):** Para cada seção (Ensino, Pesquisa, Extensão, Administrativo-Pedagógico), liste as metas do PIT que foram claramente abordadas e as que não foram ou foram incompletamente. Atribua uma **pontuação de 0 a 10** para a cobertura geral de cada seção.
-        2.  **Consistência dos Dados:** Verifique se há **discrepâncias ou inconsistências** entre o que foi prometido no `planejamento.txt` e o que foi relatado nas seções de `teaching.txt`, `research.txt`, etc., e no `relatorio_academico.md`. Destaque exemplos específicos.
-        3.  **Relevância e Profundidade:** Avalie se as atividades descritas no relatório recebem a profundidade de detalhe e a ênfase adequadas, considerando sua relevância no PIT. Comente sobre áreas que poderiam ser mais elaboradas ou concisas.
-        4.  **Proporção Promessa vs. Entrega:** Analise o equilíbrio geral entre o volume e a ambição das promessas do PIT e o que foi efetivamente reportado no relatório final. Indique se houve superação ou deficiência em relação ao planejado.
+        Critérios:
+        1. Cobertura de Metas (por Seção): liste as metas do PIT que foram abordadas, e as que não foram (conforme os arquivos das seções).
+        2. Consistência: cite qualquer discrepância entre promessas e entregas dos arquivos.
+        3. Relevância e Profundidade: só avalie o que está escrito, não o que seria esperado.
+        4. Proporção Promessa vs. Entrega: analise quantitativamente (porcentagem de metas entregues, se possível).
 
-        A avaliação deve ser formatada em **Markdown**, com cabeçalhos para cada critério e seções. Inclua exemplos de texto do relatório ou do PIT para justificar suas avaliações.
-        O resultado final desta avaliação detalhada deve ser salvo no arquivo `Relatorio_Final/avaliacao_metrica.md`.
+        O resultado final deve ser salvo em Relatorio_Final/avaliacao_metrica.md.
     """),
-    expected_output="Arquivo `Relatorio_Final/avaliacao_metrica.md` com uma análise detalhada em Markdown, avaliando a aderência do relatório ao PIT com base em cobertura, consistência, relevância e proporção promessa vs. entrega.",
+    expected_output="Arquivo Relatorio_Final/avaliacao_metrica.md detalhando aderência do relatório ao PIT apenas com base nos arquivos disponíveis.",
     agent=evaluator_metrics,
     output_file="Relatorio_Final/avaliacao_metrica.md",
     tools=[verificar_palavra_no_pdf]

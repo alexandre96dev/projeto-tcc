@@ -1,24 +1,30 @@
-After analyzing the final report and the PIT planning, here is the detailed evaluation based on the specified criteria:
+```markdown
+# Avaliação de Aderência do Relatório Final ao PIT
 
-### Evaluation of Adherence of the Final Report to the PIT
+## Introdução
 
-#### 1. Coverage of Goals:
-- **Ensino:**
-  - Goals Addressed: Preparation of lessons for discipline X focusing on current and practical content, application of innovative teaching methods. (Score: 10/10)
-- **Pesquisa:**
-  - Goals Addressed: Development of a scientific article on topic Y, conducting laboratory experiments. (Score: 10/10)
-- **Extensão:**
-  - Goals Addressed: Coordination of a local community extension project, participation in external events. (Score: 10/10)
-- **Administrativo-Pedagógico:**
-  - Goals Addressed: Participation in meetings with course coordination, monthly activity reports, organization of student records, communication of unexpected events. (Score: 10/10)
+Esta avaliação analisa a aderência do relatório final ao Planejamento Individual de Trabalho (PIT) baseando-se estritamente nos documentos fornecidos. Os critérios adotados para análise incluem Cobertura de Metas por Seção, Consistência, Relevância e Profundidade, e Proporção Promessa vs. Entrega.
 
-#### 2. Consistency of Data:
-- The activities reported in the final report align well with the planned activities in the PIT, demonstrating consistency between the two documents. No major discrepancies were identified.
+## Avaliação
 
-#### 3. Relevance and Depth:
-- The activities described in the final report demonstrate a good level of detail and relevance to the goals set in the PIT. Each section provides a clear understanding of the activities undertaken.
+### Cobertura de Metas por Seção
+- **Atividades de Ensino**: Não abordadas no relatório final.
+- **Atividades de Pesquisa**: Não abordadas no relatório final.
+- **Atividades de Extensão**: Não abordadas no relatório final.
+- **Atividades Administrativo-Pedagógicas**: Não abordadas no relatório final.
 
-#### 4. Promise vs. Delivery Balance:
-- The report reflects a balance between the promised activities in the PIT and the actual implementation. The documented activities meet the outlined expectations without significant deviations.
+### Consistência
+- Há uma completa discrepância entre as metas listadas no arquivo 'planejamento.txt' e o relatório final, onde nenhuma meta de nenhuma seção foi abordada.
 
-Overall, the final report shows strong adherence to the PIT objectives across all sections, with a high level of coverage, consistency, relevance, and a balanced delivery of promised activities.
+### Relevância e Profundidade
+- O relatório final não apresentou quaisquer informações sobre as metas e atividades previstas, resultando numa avaliação de relevância e profundidade como não aplicável.
+
+### Proporção Promessa vs. Entrega
+- 0% das metas prometidas foram efetivamente detalhadas no relatório final, indicando uma total falta de entrega conforme o planejamento inicial.
+
+## Conclusão
+
+O relatório final não conseguiu aderir às metas e atividades propostas no PIT em qualquer medida. Não houve relato sobre as atividades de ensino, pesquisa, extensão nem administrativas. É recomendado uma revisão completa do processo de documentação e reporte para futuros períodos.
+
+Este arquivo deve ser salvo como 'Relatorio_Final/avaliacao_metrica.md' para documentar oficialmente a avaliação da aderência do relatório ao PIT.
+```

@@ -1,0 +1,15 @@
+The content of the `./Relatorio_Final/
+planejamento.txt` file, which should contain all the
+commitments from the PIT document, structured
+according to the following sections:
+- Atividades de Ensino
+- Atividades de Pesquisa
+- Atividades de Extensão
+- Atividades Administrativo-Pedagógicas
+- Complemento/Observações
+The structured lists or topics under each section
+will clearly outline the specific commitments, goals,
+and deliverables that were extracted from the
+`pit_text.txt` file. Each section would be clearly
+marked and arranged in a user-friendly format ideal
+for indexing and cross-referencing.

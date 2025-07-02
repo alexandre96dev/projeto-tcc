@@ -1,2 +1,1 @@
-As informações relevantes e quantificáveis da seção de pesquisa foram extraídas e resumidas no arquivo 'Relatorio_Final/research.txt'.
-```
+Sem informações fornecidas para esta seção.
