@@ -1,6 +1,7 @@
 from crewai import Agent, Task, LLM, Crew, Process
 from textwrap import dedent
 from custom_pit import VerificarPalavraNoPDFTool
+import os
 
 # Configuração do LLM
 client = LLM(
@@ -11,13 +12,29 @@ client = LLM(
 # Ferramentas
 verificar_palavra_no_pdf = VerificarPalavraNoPDFTool()
 
+# Agente para verificar seções aplicáveis
+section_analyzer = Agent(
+    name="Analisador de Seções",
+    role="Especialista em Análise de Aplicabilidade de Seções do PIT",
+    goal=(
+        "Analisar o planejamento do PIT e determinar quais seções são aplicáveis para processamento. "
+        "Ensino é sempre obrigatório. Outras seções (Pesquisa, Extensão, Administrativo) só devem ser "
+        "processadas se houver conteúdo específico planejado no PIT."
+    ),
+    backstory="Especialista em análise documental que identifica com precisão quais seções do relatório devem ser processadas baseado no conteúdo do PIT.",
+    verbose=True,
+    llm=client
+)
+
 planner = Agent(
     name="Planejador Acadêmico",
     role="Estruturador e Organizador Mestre do Relatório Acadêmico",
     goal=(
         "Analisar profundamente o Plano Individual de Trabalho (PIT) para identificar **todas as metas, atividades e entregas prometidas** pelo docente. "
-        "Estruturar essas informações de forma lógica e categorizada por área (Ensino, Pesquisa, Extensão, Administrativo-Pedagógicas e Complementos/Observações) "
-        "para servir como o esqueleto do relatório final. Sua precisão é vital para o alinhamento de todo o projeto."
+        "Estruturar essas informações de forma lógica e categorizada por área (Ensino, Pesquisa, Extensão, Administrativo-Pedagógicas e Complementos/Observações). "
+        "IMPORTANTE: Identificar quais seções têm conteúdo no PIT para determinar o que deve ser processado no relatório final. "
+        "A seção de Ensino é OBRIGATÓRIA e sempre deve ser processada, mesmo que não haja documentos na pasta ENSINO. "
+        "**Não invente informações, utilize apenas o que está explicitamente no PIT. Sempre que possível, cite trechos do documento.**"
     ),
     backstory=(
         "Com uma visão estratégica e anos de experiência na análise de documentos acadêmicos e planejamento institucional, "
@@ -34,7 +51,11 @@ research_agents = {
         name="Pesquisador de Ensino",
         role="Analista Detalhista de Atividades Acadêmicas e Pedagógicas",
         goal=(
-            "Investigar minuciosamente os documentos fornecidos no diretório de ENSINO."
+            "Analisar as atividades de ensino sempre, independentemente da existência de documentos na pasta ENSINO. "
+            "Se houver documentos na pasta ENSINO, priorizar essas informações e fazer merge com o planejamento. "
+            "Se não houver documentos, basear-se exclusivamente no planejamento do PIT para criar um relatório "
+            "confirmando que as atividades de ensino foram executadas conforme planejado, listando disciplinas e atividades. "
+            "**Não invente informações, utilize apenas dados do planejamento PIT e/ou documentos da pasta ENSINO.**"
         ),
         backstory="Um veterano em educação, com expertise em pedagogia e análise de currículos. Seu foco é desvendar a essência das atividades de ensino e seu real impacto.",
         verbose=True,
@@ -44,10 +65,10 @@ research_agents = {
         name="Pesquisador de Pesquisa",
         role="Especialista em Produção e Análise Científica com Foco em Impacto",
         goal=(
-            "Examinar a fundo os documentos da pasta de PESQUISA, identificando projetos de pesquisa desenvolvidos, "
-            "publicações científicas (artigos, livros, capítulos), participações em congressos, "
-            "captação de recursos e o impacto mensurável dessas atividades na ciência e na sociedade. "
-            "Priorize a identificação de resultados e relevância."
+            "Processar atividades de pesquisa APENAS se houver conteúdo na seção de pesquisa do PIT. "
+            "Se houver documentos na pasta PESQUISA, priorizar essas informações e fazer merge com o planejamento. "
+            "Se não houver documentos na pasta, basear-se exclusivamente no planejamento do PIT. "
+            "**Não invente informações, utilize apenas dados do planejamento PIT e/ou documentos da pasta PESQUISA.**"
         ),
         backstory="Um pesquisador experiente, com olhar apurado para a produção acadêmica e suas métricas de impacto. Ele garante que cada descoberta seja devidamente documentada.",
         verbose=True,
@@ -57,7 +78,10 @@ research_agents = {
         name="Pesquisador de Extensão",
         role="Analista de Projetos de Extensão Universitária e Engajamento Comunitário",
         goal=(
-            "Analisar detalhadamente os documentos relacionados às atividades de EXTENSÃO."
+            "Processar atividades de extensão APENAS se houver conteúdo na seção de extensão do PIT. "
+            "Se houver documentos na pasta EXTENSAO, priorizar essas informações e fazer merge com o planejamento. "
+            "Se não houver documentos na pasta, basear-se exclusivamente no planejamento do PIT. "
+            "**Não invente informações, utilize apenas dados do planejamento PIT e/ou documentos da pasta EXTENSAO.**"
         ),
         backstory="Com um histórico em projetos sociais e universitários, este agente é perito em traduzir as ações de extensão em narrativas de impacto real na comunidade.",
         verbose=True,
@@ -67,7 +91,10 @@ research_agents = {
         name="Pesquisador Administrativo",
         role="Analista de Processos Administrativo-Pedagógicos e Governança Acadêmica",
         goal=(
-            "Investigar e extrair informações cruciais sobre atividades administrativas e pedagógicas"
+            "Processar atividades administrativo-pedagógicas APENAS se houver conteúdo na seção administrativa do PIT. "
+            "Se houver documentos na pasta ADMINISTRATIVO_PEDAGOGICO, priorizar essas informações e fazer merge com o planejamento. "
+            "Se não houver documentos na pasta, basear-se exclusivamente no planejamento do PIT. "
+            "**Não invente informações, utilize apenas dados do planejamento PIT e/ou documentos da pasta ADMINISTRATIVO_PEDAGOGICO.**"
         ),
         backstory="Um especialista em gestão universitária, capaz de identificar a relevância das atividades administrativas no panorama acadêmico geral. Ele organiza as contribuições que mantêm a instituição funcionando.",
         verbose=True,
@@ -152,38 +179,123 @@ planning_task = Task(
     description=dedent("""
         Analise o documento do Plano Individual de Trabalho (PIT) localizado em './Planejamento/PIT.pdf'.
         Sua principal responsabilidade é **identificar e extrair todas as metas, atividades e entregas prometidas** pelo docente, categorizando-as claramente por seção:
-        - Atividades de Ensino
-        - Atividades de Pesquisa
-        - Atividades de Extensão
-        - Atividades Administrativo-Pedagógicas
+        - Atividades de Ensino (OBRIGATÓRIO - sempre tem conteúdo)
+        - Atividades de Pesquisa (OPCIONAL - só processar se houver conteúdo no PIT)
+        - Atividades de Extensão (OPCIONAL - só processar se houver conteúdo no PIT)
+        - Atividades Administrativo-Pedagógicas (OPCIONAL - só processar se houver conteúdo no PIT)
         - Complemento/Observações
-        Organize essas informações de forma estruturada, com listas claras ou tópicos e crie o arquivo `Relatorio_Final/planejamento.txt` com as informações coletadas. Não invente informações
-        **O formato deve ser limpo e fácil de ler, servindo como um índice de promessas.**
+        
+        Para cada seção, indique claramente:
+        1. Se a seção tem conteúdo no PIT (SIM/NÃO)
+        2. Se tem conteúdo, liste as atividades/metas planejadas
+        3. Para Ensino: sempre listar as disciplinas ministradas
+        
+        FORMATO OBRIGATÓRIO para o arquivo `Relatorio_Final/planejamento.txt`:
+        
+        # ANÁLISE DO PIT
+        
+        ## ENSINO: SIM
+        - Lista das disciplinas/atividades de ensino encontradas no PIT
+        
+        ## PESQUISA: SIM/NÃO
+        - Se SIM: lista das atividades de pesquisa encontradas no PIT
+        - Se NÃO: indicar que não há conteúdo
+        
+        ## EXTENSÃO: SIM/NÃO
+        - Se SIM: lista das atividades de extensão encontradas no PIT
+        - Se NÃO: indicar que não há conteúdo
+        
+        ## ADMINISTRATIVO: SIM/NÃO
+        - Se SIM: lista das atividades administrativo-pedagógicas encontradas no PIT
+        - Se NÃO: indicar que não há conteúdo
+        
+        **Não invente informações, utilize apenas o que está explicitamente no PIT.**
     """),
-    expected_output="Arquivo `./Relatorio_Final/planejamento.txt` contendo as promessas do PIT organizadas de forma estruturada por seção, prontas para cruzamento com o relatório.",
+    expected_output="Arquivo `./Relatorio_Final/planejamento.txt` contendo as promessas do PIT organizadas por seção, indicando quais seções têm conteúdo para processamento.",
     agent=planner,
     output_file="./Relatorio_Final/planejamento.txt",
-    tools=[verificar_palavra_no_pdf] # Mantendo a ferramenta se ela for útil para verificar a presença de termos chave do PIT
+    tools=[verificar_palavra_no_pdf]
+)
+
+# Task para análise de seções aplicáveis
+section_analysis_task = Task(
+    description=dedent("""
+        Com base no arquivo `Relatorio_Final/planejamento.txt`, determine quais seções devem ser processadas:
+        
+        1. **ENSINO**: Sempre aplicável (obrigatório)
+        2. **PESQUISA**: Aplicável apenas se houver atividades de pesquisa planejadas no PIT
+        3. **EXTENSÃO**: Aplicável apenas se houver atividades de extensão planejadas no PIT  
+        4. **ADMINISTRATIVO**: Aplicável apenas se houver atividades administrativo-pedagógicas planejadas no PIT
+        
+        INSTRUÇÕES:
+        - Leia o arquivo `Relatorio_Final/planejamento.txt` 
+        - Procure pelas seções "## ENSINO:", "## PESQUISA:", "## EXTENSÃO:", "## ADMINISTRATIVO:"
+        - Se uma seção mostra "SIM", ela deve ser processada
+        - Se uma seção mostra "NÃO", ela não deve ser processada
+        
+        Crie um arquivo `Relatorio_Final/secoes_aplicaveis.txt` com o seguinte formato:
+        ENSINO: SIM
+        PESQUISA: SIM/NÃO
+        EXTENSAO: SIM/NÃO
+        ADMINISTRATIVO: SIM/NÃO
+        
+        Baseie-se EXCLUSIVAMENTE no conteúdo do planejamento. Não invente informações.
+    """),
+    expected_output="Arquivo `Relatorio_Final/secoes_aplicaveis.txt` indicando quais seções devem ser processadas.",
+    agent=section_analyzer,
+    output_file="Relatorio_Final/secoes_aplicaveis.txt",
+    tools=[]
 )
 
 
 research_tasks = []
 sections = {
     "teaching": "./ENSINO/ensino.pdf",
-    "research": "./PESQUISA/pesquisa.pdf",
+    "research": "./PESQUISA/pesquisa.pdf", 
     "extension": "./EXTENSAO/extensao.pdf",
     "admin": "./ADMINISTRATIVO_PEDAGOGICO/admin.pdf"
 }
 
-for section, file_path in sections.items():
+# Task específica para Ensino (sempre executada)
+research_tasks.append(Task(
+    description=dedent("""
+        ENSINO é uma seção OBRIGATÓRIA e sempre deve ser processada.
+        
+        1. Primeiro, leia o planejamento em `Relatorio_Final/planejamento.txt` e extraia as informações de ensino.
+        2. Verifique se existe o arquivo `./ENSINO/ensino.pdf` e se tem conteúdo.
+        3. Se houver conteúdo na pasta ENSINO, PRIORIZE essas informações e faça merge com o planejamento.
+        4. Se não houver conteúdo na pasta ENSINO, baseie-se EXCLUSIVAMENTE no planejamento do PIT.
+        
+        Seu relatório deve:
+        - Listar todas as disciplinas ministradas (sempre presente no PIT)
+        - Confirmar que as atividades foram executadas conforme planejado
+        - Se houver documentos na pasta, detalhar evidências e resultados específicos
+        - Manter tom de confirmação: "As atividades de ensino foram executadas conforme planejado..."
+        
+        **Não invente informações. Use apenas dados do planejamento PIT e/ou documentos da pasta ENSINO.**
+    """),
+    expected_output="Arquivo `Relatorio_Final/teaching.txt` com relatório completo de ensino, baseado no planejamento e/ou documentos da pasta.",
+    agent=research_agents["teaching"],
+    output_file="Relatorio_Final/teaching.txt",
+    tools=[verificar_palavra_no_pdf]
+))
+
+# Tasks condicionais para outras seções
+for section, file_path in [(k, v) for k, v in sections.items() if k != "teaching"]:
     research_tasks.append(Task(
         description=dedent(f"""
-            Leia o documento '{file_path}'. Caso ele esteja vazio, escreva APENAS: 'Sem informações fornecidas para esta seção'.
-            Caso haja informações, extraia e resuma os dados mais relevantes e quantificáveis para a seção de {section.upper()}.
-            NÃO invente ou complemente dados! O resumo deve ser estritamente baseado no conteúdo do arquivo.
-            Salve o resumo em Relatorio_Final/{section}.txt.
+            Esta seção ({section.upper()}) é OPCIONAL e deve ser processada APENAS se houver conteúdo no PIT.
+            
+            1. Primeiro, leia o planejamento em `Relatorio_Final/planejamento.txt` e verifique se a seção de {section.upper()} tem conteúdo.
+            2. Se NÃO houver conteúdo no PIT para {section.upper()}, escreva: "Seção não aplicável - sem atividades planejadas no PIT."
+            3. Se houver conteúdo no PIT:
+               a. Verifique se existe o arquivo `{file_path}` e se tem conteúdo
+               b. Se houver documentos na pasta, PRIORIZE essas informações e faça merge com o planejamento
+               c. Se não houver documentos na pasta, baseie-se EXCLUSIVAMENTE no planejamento do PIT
+            
+            **Não invente informações. Use apenas dados do planejamento PIT e/ou documentos da pasta {section.upper()}.**
         """),
-        expected_output=f"Arquivo Relatorio_Final/{section}.txt com um resumo factual ESTRITAMENTE com base no arquivo fonte, ou 'Sem informações fornecidas para esta seção'.",
+        expected_output=f"Arquivo `Relatorio_Final/{section}.txt` com relatório da seção {section.upper()} (se aplicável) ou indicação de não aplicabilidade.",
         agent=research_agents[section],
         output_file=f"Relatorio_Final/{section}.txt",
         tools=[verificar_palavra_no_pdf]
@@ -191,28 +303,30 @@ for section, file_path in sections.items():
 
 writing_task = Task(
     description=dedent("""
-        Sua missão é compilar o relatório acadêmico final, ESTRITAMENTE com base nos seguintes arquivos já gerados:
-        - Relatorio_Final/planejamento.txt
-        - Relatorio_Final/teaching.txt
-        - Relatorio_Final/research.txt
-        - Relatorio_Final/extension.txt
-        - Relatorio_Final/admin.txt
+        Sua missão é compilar o relatório acadêmico final baseado nos seguintes arquivos:
+        - Relatorio_Final/planejamento.txt (promessas do PIT)
+        - Relatorio_Final/secoes_aplicaveis.txt (quais seções processar)
+        - Relatorio_Final/teaching.txt (sempre presente - ensino é obrigatório)
+        - Relatorio_Final/research.txt (condicional)
+        - Relatorio_Final/extension.txt (condicional)
+        - Relatorio_Final/admin.txt (condicional)
 
-        Para cada seção (Ensino, Pesquisa, Extensão, Administrativo), só insira informações que estejam nos arquivos correspondentes. 
-        Caso algum arquivo contenha a frase 'Sem informações fornecidas para esta seção', inclua esse aviso na respectiva seção do relatório.
+        REGRAS IMPORTANTES:
+        1. **Consulte primeiro** o arquivo `secoes_aplicaveis.txt` para saber quais seções incluir
+        2. **Ensino**: Sempre incluir seção completa (é obrigatório)
+        3. **Outras seções**: Só incluir se marcadas como "SIM" no arquivo de seções aplicáveis
+        4. **Não invente informações**: Use apenas o que está nos arquivos
+        5. **Priorize documentos das pastas**: Quando há informações do PIT + documentos das pastas, priorize os documentos mas mencione o planejamento
 
-        NÃO invente, complemente ou deduza informações de nenhum outro lugar. Sua função é apenas organizar e compilar.
-
-        Estruture o relatório em Markdown, com:
-        - Introdução breve contextualizando o período do relatório.
-        - Seções separadas para Ensino, Pesquisa, Extensão e Administrativo-Pedagógico, contendo o conteúdo dos respectivos arquivos, sem alterações ou inferências.
-        - Uma conclusão, que apenas sumariza a entrega dos arquivos, sem criar análises além do que está presente.
-
-        Atenção: Se qualquer seção estiver sem dados, escreva explicitamente 'Sem informações reportadas nesta seção'.
-
-        Salve o relatório final em Relatorio_Final/relatorio_academico.md.
+        Estruture o relatório em Markdown com:
+        - Introdução contextualizando o período
+        - Seção de Ensino (sempre presente)
+        - Seções condicionais (Pesquisa, Extensão, Administrativo) apenas se aplicáveis
+        - Conclusão resumindo as principais realizações
+        
+        Para cada seção incluída, faça referência explícita ao que foi planejado no PIT e o que foi executado.
     """),
-    expected_output="Arquivo Relatorio_Final/relatorio_academico.md contendo o relatório acadêmico final, sem dados inventados, apenas compilados dos arquivos das seções.",
+    expected_output="Arquivo `Relatorio_Final/relatorio_academico.md` com relatório completo, incluindo apenas seções aplicáveis baseadas no PIT.",
     agent=writer,
     output_file="Relatorio_Final/relatorio_academico.md",
     tools=[]
@@ -286,8 +400,8 @@ academic_metrics_task = Task(
 )
 
 crew = Crew(
-    agents=[planner, *research_agents.values(), writer, reviewer_research, reviewer_report, evaluator_textual, evaluator_metrics],
-    tasks=[planning_task, *research_tasks, writing_task, review_final_report_task, textual_review_task,
+    agents=[planner, section_analyzer, *research_agents.values(), writer, reviewer_research, reviewer_report, evaluator_textual, evaluator_metrics],
+    tasks=[planning_task, section_analysis_task, *research_tasks, writing_task, review_final_report_task, textual_review_task,
         academic_metrics_task],
     process=Process.sequential,
     verbose=True,
