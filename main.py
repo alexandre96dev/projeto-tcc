@@ -5,7 +5,7 @@ import os
 
 # Configuração do LLM
 client = LLM(
-    model='openai/gpt-4-turbo',
+    model='openai/gpt-3.5-turbo',
     api_key='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'
 )
 

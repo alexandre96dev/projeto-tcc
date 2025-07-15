@@ -1,0 +1,1 @@
+Relatório_Final/avaliacao_textual.md com a avaliação linguística detalhada de todos os arquivos, mesmo que estejam vazios.
