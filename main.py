@@ -16,13 +16,13 @@ planner = Agent(
     name="Planejador Acadêmico",
     role="Estruturador e Organizador Mestre do Relatório Acadêmico",
     goal=(
-        "Analisar profundamente o Plano Individual de Trabalho (PIT) para identificar **todas as metas, atividades e entregas prometidas** pelo docente. "
-        "Estruturar essas informações de forma lógica e categorizada por área (Ensino, Pesquisa, Extensão, Administrativo-Pedagógicas e Complementos/Observações) "
-        "para servir como o esqueleto do relatório final. Sua precisão é vital para o alinhamento de todo o projeto."
+        "Analisar o Plano Individual de Trabalho (PIT) para identificar **apenas as metas, atividades e entregas realmente presentes** no documento, sem inventar, inferir ou alucinar informações. "
+        "Estruturar essas informações de forma lógica e categorizada por área (Ensino, Pesquisa, Extensão, Administrativo-Pedagógicas e Complementos/Observações), sempre com base estrita no conteúdo real do PIT. "
+        "Jamais crie dados não presentes no arquivo."
     ),
     backstory=(
         "Com uma visão estratégica e anos de experiência na análise de documentos acadêmicos e planejamento institucional, "
-        "este agente garante que cada promessa e atividade do PIT seja meticulosamente extraída e organizada. "
+        "este agente só utiliza informações reais do PIT, nunca inventando ou inferindo dados. "
         "Ele é o arquiteto da coerência do relatório, fornecendo a base sólida para os demais agentes."
     ),
     verbose=True,
@@ -35,12 +35,11 @@ research_agents = {
         name="Pesquisador de Ensino",
         role="Analista Detalhista de Atividades Acadêmicas e Pedagógicas",
         goal=(
-            "Investigar minuciosamente os documentos fornecidos no diretório de ENSINO, "
-            "extraindo dados específicos sobre carga horária, ementas, metodologias didáticas, "
-            "projetos pedagógicos e o impacto direto nas turmas e na formação dos alunos. "
-            "O resumo deve ser factual, detalhado e conciso."
+            "Investigar apenas o conteúdo real dos documentos no diretório de ENSINO, sem inventar, inferir ou alucinar dados. "
+            "Extraia somente informações que estejam explicitamente presentes nos arquivos, como carga horária, ementas, metodologias, projetos pedagógicos e impacto nas turmas. "
+            "O resumo deve ser factual, detalhado, conciso e estritamente fiel ao conteúdo dos arquivos."
         ),
-        backstory="Um veterano em educação, com expertise em pedagogia e análise de currículos. Seu foco é desvendar a essência das atividades de ensino e seu real impacto.",
+        backstory="Um veterano em educação, com expertise em pedagogia e análise de currículos, que só utiliza dados reais dos arquivos, sem criar ou inferir informações.",
         verbose=True,
         llm=client
     ),
@@ -48,12 +47,11 @@ research_agents = {
         name="Pesquisador de Pesquisa",
         role="Especialista em Produção e Análise Científica com Foco em Impacto",
         goal=(
-            "Examinar a fundo os documentos da pasta de PESQUISA, identificando projetos de pesquisa desenvolvidos, "
-            "publicações científicas (artigos, livros, capítulos), participações em congressos, "
-            "captação de recursos e o impacto mensurável dessas atividades na ciência e na sociedade. "
-            "Priorize a identificação de resultados e relevância."
+            "Examinar apenas o conteúdo real dos documentos da pasta de PESQUISA, sem inventar, inferir ou alucinar dados. "
+            "Liste somente projetos, publicações, eventos e resultados que estejam explicitamente presentes nos arquivos. "
+            "O resumo deve ser factual, detalhado, conciso e estritamente fiel ao conteúdo dos arquivos."
         ),
-        backstory="Um pesquisador experiente, com olhar apurado para a produção acadêmica e suas métricas de impacto. Ele garante que cada descoberta seja devidamente documentada.",
+        backstory="Um pesquisador experiente, com olhar apurado para a produção acadêmica, que só utiliza dados reais dos arquivos, sem criar ou inferir informações.",
         verbose=True,
         llm=client
     ),
@@ -61,12 +59,11 @@ research_agents = {
         name="Pesquisador de Extensão",
         role="Analista de Projetos de Extensão Universitária e Engajamento Comunitário",
         goal=(
-            "Analisar detalhadamente os documentos relacionados às atividades de EXTENSÃO, "
-            "identificando projetos de extensão realizados, parcerias com a comunidade/instituições, "
-            "o público beneficiado, resultados alcançados e o impacto social das ações. "
-            "Busque evidências do engajamento e transformação."
+            "Analisar apenas o conteúdo real dos documentos de EXTENSÃO, sem inventar, inferir ou alucinar dados. "
+            "Liste somente projetos, parcerias, público e resultados que estejam explicitamente presentes nos arquivos. "
+            "O resumo deve ser factual, detalhado, conciso e estritamente fiel ao conteúdo dos arquivos."
         ),
-        backstory="Com um histórico em projetos sociais e universitários, este agente é perito em traduzir as ações de extensão em narrativas de impacto real na comunidade.",
+        backstory="Com um histórico em projetos sociais e universitários, este agente só utiliza dados reais dos arquivos, sem criar ou inferir informações.",
         verbose=True,
         llm=client
     ),
@@ -74,12 +71,11 @@ research_agents = {
         name="Pesquisador Administrativo",
         role="Analista de Processos Administrativo-Pedagógicos e Governança Acadêmica",
         goal=(
-            "Investigar e extrair informações cruciais sobre atividades administrativas e pedagógicas, "
-            "incluindo participação em colegiados e comissões, gestão de cursos, organização de eventos institucionais, "
-            "desenvolvimento de políticas acadêmicas e outras contribuições para a governança universitária. "
-            "Destaque a contribuição para a estrutura e funcionamento da instituição."
+            "Investigar apenas o conteúdo real dos documentos administrativos e pedagógicos, sem inventar, inferir ou alucinar dados. "
+            "Liste somente participações, eventos, políticas e contribuições que estejam explicitamente presentes nos arquivos. "
+            "O resumo deve ser factual, detalhado, conciso e estritamente fiel ao conteúdo dos arquivos."
         ),
-        backstory="Um especialista em gestão universitária, capaz de identificar a relevância das atividades administrativas no panorama acadêmico geral. Ele organiza as contribuições que mantêm a instituição funcionando.",
+        backstory="Um especialista em gestão universitária que só utiliza dados reais dos arquivos, sem criar ou inferir informações.",
         verbose=True,
         llm=client
     )
@@ -161,19 +157,19 @@ evaluator_metrics = Agent(
 planning_task = Task(
     description=dedent("""
         Analise o documento do Plano Individual de Trabalho (PIT) localizado em './Planejamento/PIT.pdf'.
-        Sua principal responsabilidade é **identificar e extrair todas as metas, atividades e entregas prometidas** pelo docente, categorizando-as claramente por seção:
+        Sua principal responsabilidade é **identificar e extrair apenas as metas, atividades e entregas realmente presentes** no documento, sem inventar, inferir ou alucinar informações, categorizando-as claramente por seção:
         - Atividades de Ensino
         - Atividades de Pesquisa
         - Atividades de Extensão
         - Atividades Administrativo-Pedagógicas
         - Complemento/Observações
         Organize essas informações de forma estruturada, com listas claras ou tópicos, no arquivo `Relatorio_Final/planejamento.txt`.
-        **O formato deve ser limpo e fácil de ler, servindo como um índice de promessas.**
+        **O formato deve ser limpo, fácil de ler e estritamente fiel ao conteúdo do PIT, servindo como um índice de promessas reais.**
     """),
-    expected_output="Arquivo `./Relatorio_Final/planejamento.txt` contendo as promessas do PIT organizadas de forma estruturada por seção, prontas para cruzamento com o relatório.",
+    expected_output="Arquivo `./Relatorio_Final/planejamento.txt` contendo apenas as promessas reais do PIT, sem invenções, organizadas de forma estruturada por seção, prontas para cruzamento com o relatório.",
     agent=planner,
     output_file="./Relatorio_Final/planejamento.txt",
-    tools=[verificar_palavra_no_pdf] # Mantendo a ferramenta se ela for útil para verificar a presença de termos chave do PIT
+    tools=[verificar_palavra_no_pdf]
 )
 
 
@@ -188,37 +184,82 @@ sections = {
 for section, file_path in sections.items():
     research_tasks.append(Task(
         description=dedent(f"""
-            Examine o documento '{file_path}' (ou o conteúdo relevante, se o arquivo for um placeholder).
-            Sua tarefa é **extrair e resumir as informações mais relevantes e quantificáveis** para a seção de {section.upper()}.
-            Foco em:
-            - **Ensino:** Carga horária, disciplinas, metodologias, projetos pedagógicos, número de alunos/turmas, resultados de avaliação.
-            - **Pesquisa:** Títulos de projetos, publicações (com local/data), eventos (participação/apresentação), financiamentos, resultados chave.
-            - **Extensão:** Nomes de projetos, parcerias, número de beneficiados, resultados sociais, eventos comunitários.
-            - **Administrativo:** Comissões/colegiados (com papel), participação em eventos de gestão, ações de organização acadêmica, desenvolvimento de políticas.
-            O resumo deve ser objetivo, factual e conter apenas as informações essenciais para a composição do relatório. Salve o resumo no arquivo `Relatorio_Final/{section}.txt`.
+            Leia estritamente o conteúdo do arquivo '{file_path}'.
+            Sua tarefa é **extrair e resumir apenas as informações realmente presentes** nesse arquivo para a seção de {section.upper()}, sem inventar, inferir ou alucinar dados.
+            Caso o arquivo esteja vazio ou não contenha informações relevantes, apenas registre que não há conteúdo disponível para a seção.
+            O resumo deve ser objetivo, factual e estritamente fiel ao conteúdo do arquivo. Salve o resumo no arquivo `Relatorio_Final/{section}.txt`.
         """),
-        expected_output=f"Arquivo `Relatorio_Final/{section}.txt` contendo um resumo factual e detalhado das atividades de {section}, pronto para ser usado na redação do relatório.",
+        expected_output=f"Arquivo `Relatorio_Final/{section}.txt` contendo apenas o que está presente em '{file_path}', sem adições, inferências ou invenções.",
         agent=research_agents[section],
         output_file=f"Relatorio_Final/{section}.txt",
-        tools=[verificar_palavra_no_pdf] 
+        tools=[verificar_palavra_no_pdf]
     ))
 
+import os
+def gerar_relatorio_final():
+    # Lê o planejamento extraído do PIT
+    pit_path = 'Relatorio_Final/planejamento.txt'
+    pit_secoes = {}
+    if os.path.exists(pit_path):
+        with open(pit_path, 'r', encoding='utf-8') as f:
+            secao_atual = None
+            for linha in f:
+                linha = linha.strip()
+                if linha.startswith('-') or not linha:
+                    continue
+                if linha.startswith('Atividades de '):
+                    secao_atual = linha.replace('Atividades de ', '').replace(':', '').strip().lower()
+                    pit_secoes[secao_atual] = []
+                elif secao_atual:
+                    pit_secoes[secao_atual].append(linha)
+
+    # Mapeamento das seções e arquivos
+    secao_arquivos = {
+        'ensino': 'Relatorio_Final/teaching.txt',
+        'pesquisa': 'Relatorio_Final/research.txt',
+        'extensão': 'Relatorio_Final/extension.txt',
+        'administrativo-pedagógicas': 'Relatorio_Final/admin.txt',
+    }
+
+    conteudo_secoes = {}
+    for secao, arq in secao_arquivos.items():
+        if os.path.exists(arq):
+            with open(arq, 'r', encoding='utf-8') as f:
+                conteudo = f.read().strip()
+                conteudo_secoes[secao] = conteudo
+        else:
+            conteudo_secoes[secao] = ''
+
+    # Monta o relatório conforme as regras do professor
+    relatorio = ['# RELATÓRIO ACADÊMICO FINAL\n']
+    relatorio.append('## Introdução\nEste relatório apresenta o cruzamento entre o Plano Individual de Trabalho (PIT) e as atividades efetivamente realizadas, organizadas por área.')
+
+    for secao in ['ensino', 'pesquisa', 'extensão', 'administrativo-pedagógicas']:
+        pit_existe = secao in pit_secoes and pit_secoes[secao]
+        pasta_existe = bool(conteudo_secoes[secao])
+        if pit_existe or pasta_existe:
+            relatorio.append(f'\n## {secao.capitalize()}')
+            if pit_existe:
+                relatorio.append('**Promessas do PIT:**')
+                relatorio.extend([f'- {p}' for p in pit_secoes[secao]])
+            else:
+                relatorio.append('_Não há promessas no PIT para esta seção._')
+            if pasta_existe:
+                relatorio.append('**Atividades realizadas:**')
+                relatorio.append(conteudo_secoes[secao])
+            else:
+                relatorio.append('_Não há conteúdo registrado nas pastas para esta seção._')
+
+    relatorio.append('\n## Conclusão\nEste relatório reflete fielmente o cruzamento entre o PIT e as evidências das pastas, conforme solicitado.')
+    with open('Relatorio_Final/relatorio_academico.md', 'w', encoding='utf-8') as f:
+        f.write('\n'.join(relatorio))
+
+# Substitui a writing_task por uma chamada à função acima
 writing_task = Task(
     description=dedent("""
-        Sua missão é criar o relatório acadêmico final. Compile e sintetize as informações das seguintes fontes:
-        - O planejamento das promessas do PIT: `Relatorio_Final/planejamento.txt`
-        - Os resumos das atividades de ensino: `Relatorio_Final/teaching.txt`
-        - Os resumos das atividades de pesquisa: `Relatorio_Final/research.txt`
-        - Os resumos das atividades de extensão: `Relatorio_Final/extension.txt`
-        - Os resumos das atividades administrativo-pedagógicas: `Relatorio_Final/admin.txt`
-        Cruze todos esses dados com as metas e atividades propostas no PIT, elaborando um relatório acadêmico **coeso, bem estruturado, formal e formatado em Markdown**.
-        O relatório deve incluir:
-        - Uma introdução que contextualize o período e o objetivo do relatório.
-        - Seções claras para Ensino, Pesquisa, Extensão e Administrativo-Pedagógicas, cada uma detalhando as atividades realizadas e fazendo referência explícita (se possível) às promessas do PIT.
-        - Uma seção de Conclusão/Considerações Finais, que resuma as principais conquistas e talvez futuras projeções.
-        Assegure uma linguagem acadêmica e profissional, evitando jargões excessivos e mantendo a fluidez. Salve o relatório final em `Relatorio_Final/relatorio_academico.md`.
+        Gere o relatório acadêmico final executando a função `gerar_relatorio_final()`, que cruza as promessas do PIT e o conteúdo das pastas, incluindo apenas seções presentes no PIT ou com conteúdo nas pastas. Se houver conteúdo na pasta, inclua mesmo que não esteja no PIT. Se o PIT mencionar e a pasta estiver vazia, indique 'não há conteúdo'. O resultado será salvo em `Relatorio_Final/relatorio_academico.md`.
     """),
-    expected_output="Arquivo `Relatorio_Final/relatorio_academico.md` contendo o relatório acadêmico final completo, estruturado em Markdown, coerente e formal.",
+    expected_output="Arquivo `Relatorio_Final/relatorio_academico.md` contendo o relatório acadêmico final conforme as regras do professor.",
     agent=writer,
     output_file="Relatorio_Final/relatorio_academico.md",
     tools=[]

@@ -1,2 +1,3 @@
-Texto completo extraído e resumido das atividades de extensão, pronto para ser utilizado no relatório, foi salvo no arquivo 'Relatorio_Final/extension.txt'.
-```
+Activities in Extension:
+- Coordinate students' participation in the community project to teach computer science in public schools.
+- Organize a science fair open to the community.

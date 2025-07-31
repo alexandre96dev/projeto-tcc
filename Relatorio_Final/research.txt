@@ -1,2 +1,2 @@
-As informações relevantes e quantificáveis da seção de pesquisa foram extraídas e resumidas no arquivo 'Relatorio_Final/research.txt'.
-```
+- Desenvolver um projeto de iniciação científica na área de Inteligência Artificial.
+- Participar de 2 eventos científicos para apresentação de artigos.

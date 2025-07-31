@@ -1,5 +1,4 @@
-Atividades Administrativo-Pedagógicas:
-- Participação em reuniões periódicas com a coordenação do curso para discussão de melhorias (2 reuniões mensais);
-- Elaboração de relatórios mensais das atividades realizadas (1 relatório no final de cada mês);
-- Organização de registros de frequência e desempenho dos alunos;
-- Comunicação antecipada de imprevistos para readequação do cronograma, visando a continuidade das atividades sem prejuízos.
+Atividades de Ensino:
+- Ministrar a disciplina de Introdução à Computação para os calouros do curso de Sistemas de Informação.
+- Elaborar e corrigir provas e trabalhos da disciplina.
+- Realizar plantão de dúvidas semanalmente.

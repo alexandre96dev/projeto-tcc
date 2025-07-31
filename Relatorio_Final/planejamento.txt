@@ -1,21 +1,22 @@
 ```
 Atividades de Ensino:
-1. Realizar a preparação de aulas para a disciplina X, focando em conteúdos atuais e práticos para os estudantes.
-2. Aplicar métodos inovadores de ensino, como estudos de caso e gamificação, visando a maior participação e engajamento dos alunos.
+- Ministrar a disciplina de Introdução à Computação para os calouros do curso de Sistemas de Informação.
+- Elaborar e corrigir provas e trabalhos da disciplina.
+- Realizar plantão de dúvidas semanalmente.
 
 Atividades de Pesquisa:
-1. Desenvolver um artigo científico sobre o tema Y para ser submetido a conferências da área.
-2. Conduzir experimentos no laboratório para a coleta de dados necessários à pesquisa em andamento.
+- Desenvolver um projeto de iniciação científica na área de Inteligência Artificial.
+- Participar de 2 eventos científicos para apresentação de artigos.
 
 Atividades de Extensão:
-1. Coordenar um projeto de extensão com a comunidade local, proporcionando serviços educacionais e de apoio.
-2. Participar de eventos externos relacionados à área, contribuindo com a disseminação do conhecimento acadêmico.
+- Coordenar a participação dos alunos no projeto comunitário de ensino de informática em escolas públicas.
+- Organizar uma feira de ciências aberta à comunidade.
 
 Atividades Administrativo-Pedagógicas:
-1. Realizar reuniões periódicas com a coordenação do curso para discutir melhorias e ajustes necessários.
-2. Elaborar relatórios mensais das atividades realizadas, visando a transparência e prestação de contas.
+- Participar de reuniões mensais do conselho de departamento.
+- Auxiliar na organização das avaliações institucionais.
 
 Complemento/Observações:
-- É fundamental manter atualizados os registros de frequência e desempenho dos alunos.
-- Qualquer imprevisto que impacte a realização das atividades deve ser comunicado com antecedência para uma possível readequação do cronograma.
+- As atividades de extensão estão sujeitas a mudanças devido à disponibilidade de recursos.
+- Haverá uma reunião no início do semestre para definição do cronograma de atividades práticas.
 ```
