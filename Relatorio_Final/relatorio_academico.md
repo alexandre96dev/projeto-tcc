@@ -1,28 +1,54 @@
-# Relatório Acadêmico Final
+# Relatório Acadêmico
 
-## Atividades de Ensino:
-- Ministrar a disciplina de Introdução à Computação para os calouros do curso de Sistemas de Informação.
-- Elaborar e corrigir provas e trabalhos da disciplina.
-- Realizar plantão de dúvidas semanalmente.
+## Atividades de Ensino
+**Promessas do PIT:**
+Atividades de Ensino:
+- Banco de Dados (60h total, 3h semanais)
+- Inteligência Artificial (60h total, 3h semanais)
+- Mineração de Dados (60h total, 3h semanais)
+- Tópicos Especiais em Bancos de Dados (60h total, 3h semanais)
+- Projeto de Desenvolvimento de Software Web (30h total, 1,5h semanais)
 
-## Atividades de Pesquisa:
-- Desenvolver um projeto de iniciação científica na área de Inteligência Artificial.
-- Participar de 2 eventos científicos para apresentação de artigos.
+**Atividades realizadas:**
+sem informações
 
-## Atividades de Extensão:
-- Coordenar a participação dos alunos no projeto comunitário de ensino de informática em escolas públicas.
-- Organizar uma feira de ciências aberta à comunidade.
+## Atividades de Pesquisa
+**Promessas do PIT:**
+Atividades de Pesquisa:
+- (sem atividades de pesquisa no PIT)
 
-## Atividades Administrativo-Pedagógicas:
-- Participar de reuniões mensais do conselho de departamento.
-- Auxiliar na organização das avaliações institucionais.
+**Atividades realizadas:**
+sem informações
 
-## Complemento/Observações:
-- As atividades de extensão estão sujeitas a mudanças devido à disponibilidade de recursos.
-- Haverá uma reunião no início do semestre para definição do cronograma de atividades práticas.
+## Atividades de Extensão
+**Promessas do PIT:**
+Atividades de Extensão:
+- Desenvolvimento de Ferramenta de Apoio à Manutenção Industrial (8h semanais)
 
-Para mais detalhes sobre o desenvolvimento e execução de cada atividade, consulte o arquivo final em anexo.
+**Atividades realizadas:**
+As atividades de extensão desempenharam um papel fundamental na aplicação prática do conhecimento e no impacto positivo na comunidade acadêmica e industrial. Os principais destaques foram:
 
----
+1. O desenvolvimento do projeto "Desenvolvimento de Ferramenta de Apoio à Manutenção Industrial utilizando Inteligência Artificial", promovendo inovação tecnológica e aplicabilidade no setor industrial.
+2. O envolvimento ativo dos estudantes no projeto, proporcionando aprendizado prático e experiência no desenvolvimento de soluções reais.
+3. A colaboração entre diferentes áreas do conhecimento, enriquecendo a troca de ideias e metodologias.
+4. O reconhecimento da importância do projeto dentro do Instituto, incentivando futuras iniciativas na área de Inteligência Artificial aplicada à indústria.
+5. O fortalecimento da relação entre a instituição e o setor produtivo, possibilitando novas oportunidades para pesquisas e parcerias estratégicas.
 
-Este relatório apresenta a execução das atividades propostas no Plano Individual de Trabalho (PIT) de forma detalhada, refletindo o compromisso e desempenho do profissional em suas áreas de atuação.
+## Atividades Administrativo-Pedagógicas
+**Promessas do PIT:**
+Atividades Administrativo-Pedagógicas:
+- Link do Núcleo de Inovação Tecnológica (NIT) (1h semanal)
+- Membro do Núcleo de Empreendedorismo (NEI) (1h semanal)
+
+**Atividades realizadas:**
+As atividades administrativo-pedagógicas desempenharam um papel essencial na melhoria da gestão acadêmica e na contribuição para o desenvolvimento institucional. Os principais destaques incluem:
+
+1. Participação ativa no Núcleo de Inovação Tecnológica (NIT) do IFPE, auxiliando na criação e gestão de iniciativas voltadas para inovação dentro da instituição.
+2. Contribuição como membro do Núcleo de Empreendedorismo e Inovação (NEI), promovendo ações voltadas para o desenvolvimento de competências empreendedoras entre os alunos.
+3. Apoio estratégico à coordenação do curso de Análise e Desenvolvimento de Sistemas, auxiliando na tomada de decisões acadêmicas e administrativas.
+4. Colaboração na organização e melhoria de processos internos, garantindo um ambiente acadêmico mais eficiente e produtivo.
+5. Promoção do diálogo entre docentes e coordenação para aprimoramento das práticas pedagógicas e atualização do currículo do curso.
+
+## Observações e Complementos
+- Orientação de estágio de estudantes Álvaro Silva, José Marcos Filho e Matheus Barros
+- Declarações e portarias de apoio ao ensino e atividades administrativas em anexo

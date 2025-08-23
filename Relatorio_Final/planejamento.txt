@@ -1,22 +1,20 @@
-```
 Atividades de Ensino:
-- Ministrar a disciplina de Introdução à Computação para os calouros do curso de Sistemas de Informação.
-- Elaborar e corrigir provas e trabalhos da disciplina.
-- Realizar plantão de dúvidas semanalmente.
+- Banco de Dados (60h total, 3h semanais)
+- Inteligência Artificial (60h total, 3h semanais)
+- Mineração de Dados (60h total, 3h semanais)
+- Tópicos Especiais em Bancos de Dados (60h total, 3h semanais)
+- Projeto de Desenvolvimento de Software Web (30h total, 1,5h semanais)
 
 Atividades de Pesquisa:
-- Desenvolver um projeto de iniciação científica na área de Inteligência Artificial.
-- Participar de 2 eventos científicos para apresentação de artigos.
+- (sem atividades de pesquisa no PIT)
 
 Atividades de Extensão:
-- Coordenar a participação dos alunos no projeto comunitário de ensino de informática em escolas públicas.
-- Organizar uma feira de ciências aberta à comunidade.
+- Desenvolvimento de Ferramenta de Apoio à Manutenção Industrial (8h semanais)
 
 Atividades Administrativo-Pedagógicas:
-- Participar de reuniões mensais do conselho de departamento.
-- Auxiliar na organização das avaliações institucionais.
+- Link do Núcleo de Inovação Tecnológica (NIT) (1h semanal)
+- Membro do Núcleo de Empreendedorismo (NEI) (1h semanal)
 
 Complemento/Observações:
-- As atividades de extensão estão sujeitas a mudanças devido à disponibilidade de recursos.
-- Haverá uma reunião no início do semestre para definição do cronograma de atividades práticas.
-```
+- Orientação de estágio de estudantes Álvaro Silva, José Marcos Filho e Matheus Barros
+- Declarações e portarias de apoio ao ensino e atividades administrativas em anexo

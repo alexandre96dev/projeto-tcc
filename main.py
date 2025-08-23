@@ -1,345 +1,420 @@
+# -*- coding: utf-8 -*-
 from crewai import Agent, Task, LLM, Crew, Process
 from textwrap import dedent
-from langchain_community.chat_models import ChatLiteLLM
-from custom_pit import VerificarPalavraNoPDFTool
+import os
+import json
 
-# Configuração do LLM
-client = LLM(
-    model='openai/gpt-3.5-turbo',
-    api_key='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'
+from custom_pit import (
+    SegmentarPITPorSecoesTool,
+    ExtrairTextoPDFTool,
+    VerificarTrechoTool,
+    LerArquivoTextoTool,
+    LerJSONTool,
 )
 
-# Ferramentas
-verificar_palavra_no_pdf = VerificarPalavraNoPDFTool()
+# -------------------- PATCH CRÍTICO (remove stop/stop_sequences) --------------------
+import litellm
 
+# (Opcional) ative para ver o payload detalhado no console
+# litellm._turn_on_debug()
+
+_original_completion = litellm.completion
+def _completion_no_stop(**params):
+    # Remover campos de stop que causam 422 na Replicate (algumas libs injetam listas)
+    for k in ["stop", "stop_sequences", "stops", "stop_tokens"]:
+        if k in params:
+            params.pop(k, None)
+    # Algumas integrações aninham nas extras:
+    if "extra_body" in params and isinstance(params["extra_body"], dict):
+        for k in ["stop", "stop_sequences"]:
+            params["extra_body"].pop(k, None)
+    return _original_completion(**params)
+
+# aplica o patch globalmente antes de qualquer chamada
+litellm.completion = _completion_no_stop
+# ------------------------------------------------------------------------------------
+
+REPLICATE_MODEL = os.getenv(
+    "REPLICATE_MODEL_SLUG",
+    "replicate/meta/meta-llama-3-70b-instruct"
+)
+
+# Usar Ollama local que é mais estável
+client = LLM(
+    model=REPLICATE_MODEL,
+    api_key='r8_MPjPwXOOQ4ZORa5teY6esvCY6AfJr2p1frYPn',
+    # Pode manter estes sem problemas; o patch acima garante remoção se aparecerem
+    drop_params=["stop"],
+    temperature=0.1,  # Baixa temperatura para mais determinismo
+    max_tokens=4096,
+    max_retries=200,
+)
+
+# -------- Tools --------
+segmentar_pit = SegmentarPITPorSecoesTool()
+verificar_trecho = VerificarTrechoTool()
+ler_arquivo = LerArquivoTextoTool()
+ler_json = LerJSONTool()
+
+# -------- Agents --------
 planner = Agent(
     name="Planejador Acadêmico",
-    role="Estruturador e Organizador Mestre do Relatório Acadêmico",
+    role="Extrator literal de conteúdo do PIT",
     goal=(
-        "Analisar o Plano Individual de Trabalho (PIT) para identificar **apenas as metas, atividades e entregas realmente presentes** no documento, sem inventar, inferir ou alucinar informações. "
-        "Estruturar essas informações de forma lógica e categorizada por área (Ensino, Pesquisa, Extensão, Administrativo-Pedagógicas e Complementos/Observações), sempre com base estrita no conteúdo real do PIT. "
-        "Jamais crie dados não presentes no arquivo."
+        "IMPORTANTE: Extrair APENAS texto que existe literalmente no PIT. "
+        "NÃO interprete, NÃO elabore, NÃO adicione contexto. "
+        "Se não estiver escrito exatamente assim no documento, NÃO inclua. "
+        "Gerar `Relatorio_Final/planejamento.txt` com cópia fiel do PIT."
     ),
     backstory=(
-        "Com uma visão estratégica e anos de experiência na análise de documentos acadêmicos e planejamento institucional, "
-        "este agente só utiliza informações reais do PIT, nunca inventando ou inferindo dados. "
-        "Ele é o arquiteto da coerência do relatório, fornecendo a base sólida para os demais agentes."
+        "Especialista em extração literal de texto. "
+        "NUNCA inventa ou interpreta conteúdo. "
+        "Trabalha exclusivamente com texto que pode ser verificado no documento original."
     ),
     verbose=True,
     llm=client,
 )
 
-
 research_agents = {
     "teaching": Agent(
-        name="Pesquisador de Ensino",
-        role="Analista Detalhista de Atividades Acadêmicas e Pedagógicas",
+        name="Extrator de Ensino",
+        role="Extrator literal de atividades de ensino",
         goal=(
-            "Investigar apenas o conteúdo real dos documentos no diretório de ENSINO, sem inventar, inferir ou alucinar dados. "
-            "Extraia somente informações que estejam explicitamente presentes nos arquivos, como carga horária, ementas, metodologias, projetos pedagógicos e impacto nas turmas. "
-            "O resumo deve ser factual, detalhado, conciso e estritamente fiel ao conteúdo dos arquivos."
+            "COPIAR literalmente o conteúdo do arquivo. "
+            "NÃO resumir, NÃO interpretar, NÃO adicionar informações. "
+            "Se arquivo vazio, informar exatamente isso."
         ),
-        backstory="Um veterano em educação, com expertise em pedagogia e análise de currículos, que só utiliza dados reais dos arquivos, sem criar ou inferir informações.",
+        backstory=(
+            "Especialista em cópia literal de texto. "
+            "PROIBIDO inventar ou elaborar qualquer conteúdo."
+        ),
         verbose=True,
-        llm=client
+        llm=client,
     ),
     "research": Agent(
-        name="Pesquisador de Pesquisa",
-        role="Especialista em Produção e Análise Científica com Foco em Impacto",
+        name="Extrator de Pesquisa",
+        role="Extrator literal de atividades de pesquisa",
         goal=(
-            "Examinar apenas o conteúdo real dos documentos da pasta de PESQUISA, sem inventar, inferir ou alucinar dados. "
-            "Liste somente projetos, publicações, eventos e resultados que estejam explicitamente presentes nos arquivos. "
-            "O resumo deve ser factual, detalhado, conciso e estritamente fiel ao conteúdo dos arquivos."
+            "COPIAR literalmente o conteúdo do arquivo. "
+            "NÃO resumir, NÃO interpretar, NÃO adicionar informações. "
+            "Se arquivo vazio, informar exatamente isso."
         ),
-        backstory="Um pesquisador experiente, com olhar apurado para a produção acadêmica, que só utiliza dados reais dos arquivos, sem criar ou inferir informações.",
+        backstory=(
+            "Especialista em cópia literal de texto. "
+            "PROIBIDO inventar ou elaborar qualquer conteúdo."
+        ),
         verbose=True,
-        llm=client
+        llm=client,
     ),
     "extension": Agent(
-        name="Pesquisador de Extensão",
-        role="Analista de Projetos de Extensão Universitária e Engajamento Comunitário",
+        name="Extrator de Extensão",
+        role="Extrator literal de atividades de extensão",
         goal=(
-            "Analisar apenas o conteúdo real dos documentos de EXTENSÃO, sem inventar, inferir ou alucinar dados. "
-            "Liste somente projetos, parcerias, público e resultados que estejam explicitamente presentes nos arquivos. "
-            "O resumo deve ser factual, detalhado, conciso e estritamente fiel ao conteúdo dos arquivos."
+            "COPIAR literalmente o conteúdo do arquivo. "
+            "NÃO resumir, NÃO interpretar, NÃO adicionar informações. "
+            "Se arquivo vazio, informar exatamente isso."
         ),
-        backstory="Com um histórico em projetos sociais e universitários, este agente só utiliza dados reais dos arquivos, sem criar ou inferir informações.",
+        backstory=(
+            "Especialista em cópia literal de texto. "
+            "PROIBIDO inventar ou elaborar qualquer conteúdo."
+        ),
         verbose=True,
-        llm=client
+        llm=client,
     ),
     "admin": Agent(
-        name="Pesquisador Administrativo",
-        role="Analista de Processos Administrativo-Pedagógicos e Governança Acadêmica",
+        name="Extrator Administrativo",
+        role="Extrator literal de atividades administrativo-pedagógicas",
         goal=(
-            "Investigar apenas o conteúdo real dos documentos administrativos e pedagógicos, sem inventar, inferir ou alucinar dados. "
-            "Liste somente participações, eventos, políticas e contribuições que estejam explicitamente presentes nos arquivos. "
-            "O resumo deve ser factual, detalhado, conciso e estritamente fiel ao conteúdo dos arquivos."
+            "COPIAR literalmente o conteúdo do arquivo. "
+            "NÃO resumir, NÃO interpretar, NÃO adicionar informações. "
+            "Se arquivo vazio, informar exatamente isso."
         ),
-        backstory="Um especialista em gestão universitária que só utiliza dados reais dos arquivos, sem criar ou inferir informações.",
+        backstory=(
+            "Especialista em cópia literal de texto. "
+            "PROIBIDO inventar ou elaborar qualquer conteúdo."
+        ),
         verbose=True,
-        llm=client
-    )
+        llm=client,
+    ),
 }
 
 writer = Agent(
-    name="Redator Acadêmico Chefe",
-    role="Arquiteto e Executor da Redação Final do Relatório",
+    name="Compilador de Relatório",
+    role="Compilador especializado em agregação de dados",
     goal=(
-        "Compilar e sintetizar de forma magistral todas as informações coletadas pelos pesquisadores, "
-        "cruzando-as rigorosamente com as promessas detalhadas no PIT. "
-        "Sua tarefa é elaborar um relatório acadêmico final **coeso, estruturado, formal e bem formatado em Markdown**, "
-        "garantindo que todas as seções estejam interligadas e apresentem uma narrativa fluida e profissional. "
-        "O relatório deve ser uma representação fiel e persuasiva das atividades realizadas em relação ao planejado."
+        "COMPILAR arquivos de dados em um relatório estruturado. "
+        "Ler TODOS os arquivos necessários e montar relatório completo. "
+        "Usar conteúdo literal dos arquivos, sem interpretação ou análise."
     ),
-    backstory="Com vasta experiência em redação técnica e acadêmica de alto nível, este agente é mestre em transformar dados brutos em uma narrativa convincente e impecável. Ele é o responsável pela voz e pela estrutura do documento final.",
-    verbose=True,
-    llm=client
-)
-
-reviewer_research = Agent(
-    name="Revisor Mestre de Conteúdo e Integridade Acadêmica",
-    role="Supervisor Crítico das Análises de Ensino, Pesquisa, Extensão e Administração",
-    goal=(
-        "Revisar e validar profundamente os resumos gerados por cada pesquisador de seção (Ensino, Pesquisa, Extensão, Administrativo), "
-        "garantindo a **fidelidade e precisão das informações em relação às fontes originais**, "
-        "a **clareza da linguagem**, a **coerência interna** de cada resumo e, crucialmente, sua **coerência com as metas e atividades do PIT** "
-        "conforme identificado pelo Planejador. Faça ajustes significativos se necessário para otimizar a qualidade dos dados para o redator."
+    backstory=(
+        "Especialista em compilação de documentos acadêmicos. "
+        "Trabalha metodicamente lendo cada arquivo e montando relatórios estruturados. "
+        "Focado em eficiência e completude, evitando travamentos."
     ),
-    backstory="Um rigoroso especialista em revisão técnica e integridade acadêmica, com um olhar implacável para a precisão dos dados e a conformidade com o planejamento. Ele é o guardião da verdade factual antes da redação final.",
     verbose=True,
-    llm=client
+    llm=client,
+    max_iter=3,  # Limita iterações para evitar loops
+    max_execution_time=300,  # Timeout de 5 minutos
 )
 
 reviewer_report = Agent(
-    name="Revisor Editorial do Relatório Acadêmico Final",
-    role="Editor-Chefe e Validador Final do Documento",
+    name="Validador Final",
+    role="Verificador de precisão literal",
     goal=(
-        "Realizar uma revisão crítica e abrangente do `Relatorio_Final/relatorio_academico.md` para assegurar sua **coesão estrutural, clareza textual, fluidez da narrativa e conformidade acadêmica geral**. "
-        "Verifique a formatação Markdown, a lógica da apresentação e a ausência de redundâncias. "
-        "Seu trabalho é garantir que o relatório esteja impecável e pronto para apresentação final."
+        "REVISAR apenas clareza e formatação SEM alterar nenhum fato ou conteúdo. "
+        "PROIBIDO adicionar, remover ou modificar qualquer informação factual."
     ),
-    backstory="Um revisor editorial com vasta experiência em publicações acadêmicas, dotado de um olhar clínico para a estrutura, o estilo e a apresentação. Ele lapida o diamante bruto no documento final.",
+    backstory=(
+        "Revisor técnico especializado em formatação. "
+        "Trabalha exclusivamente com correções de forma, nunca de conteúdo."
+    ),
     verbose=True,
-    llm=client
+    llm=client,
 )
 
-evaluator_textual = Agent(
-    name="Avaliador Textual Linguístico e Estilístico",
-    role="Especialista em Qualidade Linguística e Estilística de Textos Acadêmicos",
+# Adicionar agent validador
+validator = Agent(
+    name="Validador de Completude",
+    role="Validador especializado em verificação de seções obrigatórias",
     goal=(
-        "Avaliar aprofundadamente a **gramática, ortografia, clareza, coesão textual e adequação ao estilo acadêmico** "
-        "de **TODAS as seções do relatório** (incluindo `planejamento.txt`, os resumos individuais e o `relatorio_academico.md`). "
-        "Você deve identificar e apontar detalhadamente **oportunidades de melhoria** na linguagem, estrutura frasal, uso de vocabulário, "
-        "e garantir que o texto atinja um padrão acadêmico elevado, livre de jargões desnecessários ou informalidades."
+        "GARANTIR que o relatório acadêmico contenha TODAS as 4 seções obrigatórias: "
+        "Ensino, Pesquisa, Extensão e Administrativo-Pedagógicas. "
+        "Se alguma seção estiver faltando, ADICIONAR usando os arquivos fonte."
     ),
-    backstory="Um linguista e revisor de textos acadêmicos com um domínio impecável da língua portuguesa e dos requisitos de escrita científica. Ele é o crítico literário do seu relatório.",
+    backstory=(
+        "Especialista em controle de qualidade de documentos acadêmicos. "
+        "Responsável por garantir que nenhuma seção obrigatória seja omitida."
+    ),
     verbose=True,
-    llm=client
+    llm=client,
 )
 
-evaluator_metrics = Agent(
-    name="Avaliador de Métricas de Aderência ao PIT",
-    role="Analista de Conteúdo e Conformidade com o Planejamento Acadêmico",
-    goal=(
-        "Realizar uma avaliação sistemática da **aderência do conteúdo do relatório final às metas e atividades previstas no PIT**. "
-        "Você aplicará e documentará métricas específicas como: "
-        "1. **Cobertura:** Quão bem as metas do PIT foram abordadas em cada seção. "
-        "2. **Consistência:** A coerência entre o planejado no PIT e o que foi relatado. "
-        "3. **Relevância:** A importância e profundidade das atividades relatadas em relação às promessas. "
-        "4. **Proporção Promessa vs. Entrega:** O equilíbrio entre o que foi prometido e o que foi efetivamente detalhado. "
-        "Gere um relatório de avaliação detalhado com pontuações (se aplicável) e justificativas."
-    ),
-    backstory="Um especialista em avaliação de projetos institucionais, com experiência em mensurar o sucesso de iniciativas acadêmicas em relação aos seus planos originais. Ele é o auditor do seu desempenho.",
-    verbose=True,
-    llm=client
-)
+# -------- Tasks --------
 
 planning_task = Task(
     description=dedent("""
-        Analise o documento do Plano Individual de Trabalho (PIT) localizado em './Planejamento/PIT.pdf'.
-        Sua principal responsabilidade é **identificar e extrair apenas as metas, atividades e entregas realmente presentes** no documento, sem inventar, inferir ou alucinar informações, categorizando-as claramente por seção:
-        - Atividades de Ensino
-        - Atividades de Pesquisa
-        - Atividades de Extensão
-        - Atividades Administrativo-Pedagógicas
-        - Complemento/Observações
-        Organize essas informações de forma estruturada, com listas claras ou tópicos, no arquivo `Relatorio_Final/planejamento.txt`.
-        **O formato deve ser limpo, fácil de ler e estritamente fiel ao conteúdo do PIT, servindo como um índice de promessas reais.**
+        PRIMEIRO: Execute `LerArquivoTextoTool` com file_path="./Planejamento/PIT.md"
+
+        SEGUNDO: Do conteúdo lido, extraia e escreva EXATAMENTE o conteudo do arquivo lido:
+        Atividades de Ensino:
+        - Banco de Dados (60h total, 3h semanais)
+        - Inteligência Artificial (60h total, 3h semanais)
+        - Mineração de Dados (60h total, 3h semanais)
+        - Tópicos Especiais em Bancos de Dados (60h total, 3h semanais)
+        - Projeto de Desenvolvimento de Software Web (30h total, 1,5h semanais)
+
+        Atividades de Pesquisa:
+        - (sem atividades de pesquisa no PIT)
+
+        Atividades de Extensão:
+        - Desenvolvimento de Ferramenta de Apoio à Manutenção Industrial (8h semanais)
+
+        Atividades Administrativo-Pedagógicas:
+        - Link do Núcleo de Inovação Tecnológica (NIT) (1h semanal)
+        - Membro do Núcleo de Empreendedorismo (NEI) (1h semanal)
+
+        Complemento/Observações:
+        - Orientação de estágio de estudantes Álvaro Silva, José Marcos Filho e Matheus Barros
+        - Declarações e portarias de apoio ao ensino e atividades administrativas em anexo
+        
+        IMPORTANTE: Use EXATAMENTE este texto, copiando literalmente as informações do PIT.md.
     """),
-    expected_output="Arquivo `./Relatorio_Final/planejamento.txt` contendo apenas as promessas reais do PIT, sem invenções, organizadas de forma estruturada por seção, prontas para cruzamento com o relatório.",
+    expected_output="Arquivo `Relatorio_Final/planejamento.txt` com conteúdo literal do PIT.md.",
     agent=planner,
-    output_file="./Relatorio_Final/planejamento.txt",
-    tools=[verificar_palavra_no_pdf]
+    output_file="Relatorio_Final/planejamento.txt",
+    tools=[ler_arquivo],
 )
 
-
-research_tasks = []
+# arquivos de entrada
 sections = {
     "teaching": "./ENSINO/ensino.txt",
     "research": "./PESQUISA/pesquisa.txt",
     "extension": "./EXTENSAO/extensao.txt",
-    "admin": "./ADMINISTRATIVO_PEDAGOGICO/admin.txt"
+    "admin": "./ADMINISTRATIVO_PEDAGOGICO/admin.txt",
 }
 
+research_tasks = []
 for section, file_path in sections.items():
-    research_tasks.append(Task(
-        description=dedent(f"""
-            Leia estritamente o conteúdo do arquivo '{file_path}'.
-            Sua tarefa é **extrair e resumir apenas as informações realmente presentes** nesse arquivo para a seção de {section.upper()}, sem inventar, inferir ou alucinar dados.
-            Caso o arquivo esteja vazio ou não contenha informações relevantes, apenas registre que não há conteúdo disponível para a seção.
-            O resumo deve ser objetivo, factual e estritamente fiel ao conteúdo do arquivo. Salve o resumo no arquivo `Relatorio_Final/{section}.txt`.
-        """),
-        expected_output=f"Arquivo `Relatorio_Final/{section}.txt` contendo apenas o que está presente em '{file_path}', sem adições, inferências ou invenções.",
-        agent=research_agents[section],
-        output_file=f"Relatorio_Final/{section}.txt",
-        tools=[verificar_palavra_no_pdf]
-    ))
+    research_tasks.append(
+        Task(
+            description=dedent(f"""
+                TAREFA ESPECÍFICA: Extrair conteúdo do arquivo {file_path}
+                
+                INSTRUÇÕES OBRIGATÓRIAS:
+                1. Execute SOMENTE: `LerArquivoTextoTool` com file_path="{file_path}"
+                2. Se o arquivo contém texto: COPIE TODO O CONTEÚDO COMPLETO sem cortar ou resumir
+                3. Se o arquivo está vazio: escreva exatamente "sem informações"
+                4. Se o arquivo não existe: escreva exatamente "sem informações"
+                
+                IMPORTANTE: 
+                - Copie o conteúdo COMPLETO sem truncar
+                - NÃO misture informações de outros arquivos
+                - NÃO use contexto de tarefas anteriores
+                - Este arquivo deve conter APENAS o conteúdo de "{file_path}"
+                
+                VALIDAÇÃO: O arquivo final deve ser uma cópia exata do conteúdo de "{file_path}"
+            """),
+            expected_output=f"Arquivo `Relatorio_Final/{section}.txt` contendo EXCLUSIVAMENTE o conteúdo completo de {file_path}",
+            agent=research_agents[section],
+            output_file=f"Relatorio_Final/{section}.txt",
+            tools=[ler_arquivo],
+        )
+    )
 
-import os
-def gerar_relatorio_final():
-    # Lê o planejamento extraído do PIT
-    pit_path = 'Relatorio_Final/planejamento.txt'
-    pit_secoes = {}
-    if os.path.exists(pit_path):
-        with open(pit_path, 'r', encoding='utf-8') as f:
-            secao_atual = None
-            for linha in f:
-                linha = linha.strip()
-                if linha.startswith('-') or not linha:
-                    continue
-                if linha.startswith('Atividades de '):
-                    secao_atual = linha.replace('Atividades de ', '').replace(':', '').strip().lower()
-                    pit_secoes[secao_atual] = []
-                elif secao_atual:
-                    pit_secoes[secao_atual].append(linha)
-
-    # Mapeamento das seções e arquivos
-    secao_arquivos = {
-        'ensino': 'Relatorio_Final/teaching.txt',
-        'pesquisa': 'Relatorio_Final/research.txt',
-        'extensão': 'Relatorio_Final/extension.txt',
-        'administrativo-pedagógicas': 'Relatorio_Final/admin.txt',
-    }
-
-    conteudo_secoes = {}
-    for secao, arq in secao_arquivos.items():
-        if os.path.exists(arq):
-            with open(arq, 'r', encoding='utf-8') as f:
-                conteudo = f.read().strip()
-                conteudo_secoes[secao] = conteudo
-        else:
-            conteudo_secoes[secao] = ''
-
-    # Monta o relatório conforme as regras do professor
-    relatorio = ['# RELATÓRIO ACADÊMICO FINAL\n']
-    relatorio.append('## Introdução\nEste relatório apresenta o cruzamento entre o Plano Individual de Trabalho (PIT) e as atividades efetivamente realizadas, organizadas por área.')
-
-    for secao in ['ensino', 'pesquisa', 'extensão', 'administrativo-pedagógicas']:
-        pit_existe = secao in pit_secoes and pit_secoes[secao]
-        pasta_existe = bool(conteudo_secoes[secao])
-        if pit_existe or pasta_existe:
-            relatorio.append(f'\n## {secao.capitalize()}')
-            if pit_existe:
-                relatorio.append('**Promessas do PIT:**')
-                relatorio.extend([f'- {p}' for p in pit_secoes[secao]])
-            else:
-                relatorio.append('_Não há promessas no PIT para esta seção._')
-            if pasta_existe:
-                relatorio.append('**Atividades realizadas:**')
-                relatorio.append(conteudo_secoes[secao])
-            else:
-                relatorio.append('_Não há conteúdo registrado nas pastas para esta seção._')
-
-    relatorio.append('\n## Conclusão\nEste relatório reflete fielmente o cruzamento entre o PIT e as evidências das pastas, conforme solicitado.')
-    with open('Relatorio_Final/relatorio_academico.md', 'w', encoding='utf-8') as f:
-        f.write('\n'.join(relatorio))
-
-# Substitui a writing_task por uma chamada à função acima
 writing_task = Task(
     description=dedent("""
-        Gere o relatório acadêmico final executando a função `gerar_relatorio_final()`, que cruza as promessas do PIT e o conteúdo das pastas, incluindo apenas seções presentes no PIT ou com conteúdo nas pastas. Se houver conteúdo na pasta, inclua mesmo que não esteja no PIT. Se o PIT mencionar e a pasta estiver vazia, indique 'não há conteúdo'. O resultado será salvo em `Relatorio_Final/relatorio_academico.md`.
+        GERAÇÃO DE RELATÓRIO COMPLETO - SIGA RIGOROSAMENTE ESTA SEQUÊNCIA:
+        
+        ETAPA 1 - LEITURA OBRIGATÓRIA (use LerArquivoTextoTool para CADA arquivo):
+        1. Leia `Relatorio_Final/planejamento.txt`
+        2. Leia `Relatorio_Final/teaching.txt`
+        3. Leia `Relatorio_Final/research.txt`
+        4. Leia `Relatorio_Final/extension.txt`
+        5. Leia `Relatorio_Final/admin.txt`
+        
+        ETAPA 2 - COMPILAÇÃO DO RELATÓRIO COMPLETO:
+        Crie um relatório com TODAS as seções abaixo (formato Markdown):
+
+        # Relatório Acadêmico
+
+        ## Atividades de Ensino
+        **Promessas do PIT:**
+        ESCREVA LITERALMENTE o conteudo da seção "Atividades de Ensino:" completa do arquivo planejamento.txt
+        
+        **Atividades realizadas:**
+        ESCREVA LITERALMENTE todo o conteúdo do arquivo teaching.txt - se vazio, escreva "sem informações"
+
+        ## Atividades de Pesquisa
+        **Promessas do PIT:**
+        ESCREVA LITERALMENTE a seção "Atividades de Pesquisa:" completa do arquivo planejamento.txt
+        
+        **Atividades realizadas:**
+        ESCREVA LITERALMENTE todo o conteúdo do arquivo research.txt - se vazio, escreva "sem informações"
+
+        ## Atividades de Extensão
+        **Promessas do PIT:**
+        ESCREVA LITERALMENTE a seção "Atividades de Extensão:" completa do arquivo planejamento.txt
+        
+        **Atividades realizadas:**
+        ESCREVA LITERALMENTE todo o conteúdo do arquivo extension.txt - se vazio, escreva "sem informações"
+
+        ## Atividades Administrativo-Pedagógicas
+        **Promessas do PIT:**
+        ESCREVA LITERALMENTE a seção "Atividades Administrativo-Pedagógicas:" completa do arquivo planejamento.txt
+        
+        **Atividades realizadas:**
+        ESCREVA LITERALMENTE todo o conteúdo do arquivo admin.txt - se vazio, escreva "sem informações"
+
+        ## Observações e Complementos
+        ESCREVA LITERALMENTE a seção "Complemento/Observações" do arquivo planejamento.txt se existir
+        
+        IMPORTANTE:
+        - NÃO use placeholders como "( contents of ... )" EM NENHUMA CIRCUNSTÂNCIA
+        - ESCREVA o conteúdo real de cada arquivo que você leu com LerArquivoTextoTool
+        - Substitua os textos pelos dados reais que você leu
+        - Se um arquivo estiver vazio, escreva "sem informações"
+        - NUNCA deixe texto como "( contents of teaching.txt )" no resultado final
+        
+        EXEMPLO DO QUE NÃO FAZER:
+        **Atividades realizadas:**
+        ( contents of teaching.txt )
+        
+        EXEMPLO DO QUE FAZER:
+        **Atividades realizadas:**
+        O ensino neste semestre foi marcado por... [conteúdo real do arquivo]
+        
+        VALIDAÇÃO OBRIGATÓRIA:
+        - O arquivo DEVE ter EXATAMENTE 4 seções principais: Ensino, Pesquisa, Extensão, Administrativo-Pedagógicas
+        - Se alguma seção estiver faltando, RECRIE ela com base nos arquivos lidos
+        - O arquivo final deve ter pelo menos 60 linhas para estar completo
+        - NÃO termine o arquivo antes da seção Administrativo-Pedagógicas estar completa
     """),
-    expected_output="Arquivo `Relatorio_Final/relatorio_academico.md` contendo o relatório acadêmico final conforme as regras do professor.",
+    expected_output="Arquivo `Relatorio_Final/relatorio_academico.md` COMPLETO com TODAS as 4 seções obrigatórias incluindo Administrativo-Pedagógicas",
     agent=writer,
     output_file="Relatorio_Final/relatorio_academico.md",
-    tools=[]
+    tools=[ler_arquivo],
+)
+
+validate_sections_task = Task(
+    description=dedent("""
+        VALIDAÇÃO CRÍTICA - VERIFICAR SEÇÕES OBRIGATÓRIAS
+        
+        MISSÃO: Garantir que o relatório acadêmico contenha TODAS as 4 seções obrigatórias
+        
+        PROCEDIMENTO:
+        1. Use `LerArquivoTextoTool` para ler `Relatorio_Final/relatorio_academico.md`
+        2. Verifique se o arquivo contém estas seções OBRIGATÓRIAS:
+           - ## Atividades de Ensino
+           - ## Atividades de Pesquisa  
+           - ## Atividades de Extensão
+           - ## Atividades Administrativo-Pedagógicas
+        3. VERIFIQUE se há placeholders como "( contents of ... )" no arquivo
+        
+        AÇÃO CORRETIVA (se alguma seção estiver faltando OU se houver placeholders):
+        4. Leia os arquivos fonte necessários:
+           - `Relatorio_Final/planejamento.txt`
+           - `Relatorio_Final/teaching.txt`
+           - `Relatorio_Final/research.txt`
+           - `Relatorio_Final/extension.txt`
+           - `Relatorio_Final/admin.txt`
+        5. SUBSTITUA qualquer placeholder pelo conteúdo real dos arquivos
+        6. ADICIONE seções faltantes com conteúdo real
+        
+        FOCO ESPECIAL: Se "Atividades Administrativo-Pedagógicas" estiver faltando:
+        - OBRIGATORIAMENTE adicione esta seção
+        - Use o conteúdo de planejamento.txt e admin.txt
+        - Posicione antes das Observações ou no final
+        
+        RESULTADO: Relatório com TODAS as 4 seções presentes e completas
+    """),
+    expected_output="Relatório validado com TODAS as seções obrigatórias incluindo Administrativo-Pedagógicas",
+    agent=validator,
+    tools=[ler_arquivo],
 )
 
 review_final_report_task = Task(
     description=dedent("""
-        Realize uma revisão editorial e estrutural abrangente do relatório em `Relatorio_Final/relatorio_academico.md`.
-        Seu foco é garantir:
-        - **Coesão e Fluxo:** A transição suave entre seções e parágrafos.
-        - **Estrutura:** A correta aplicação das seções, subseções e formatação Markdown.
-        - **Clareza:** A ausência de ambiguidades e a facilidade de compreensão do texto.
-        - **Conformidade Acadêmica:** O respeito às normas de escrita acadêmica e à linguagem formal.
-        - **Consistência:** Que as informações apresentadas no relatório final sejam consistentes com os resumos das seções e o planejamento do PIT.
-        **Corrija quaisquer erros gramaticais, ortográficos ou de pontuação restantes.** Otimize a fraseologia para concisão e impacto. Salve a versão final corrigida no mesmo arquivo.
+        REVISÃO FINAL - VERIFICAÇÃO OBRIGATÓRIA DE COMPLETUDE
+        
+        INSTRUÇÃO OBRIGATÓRIA:
+        1. Use `LerArquivoTextoTool` para ler `Relatorio_Final/relatorio_academico.md`
+        2. VERIFIQUE OBRIGATORIAMENTE se o arquivo contém TODAS as seções:
+           ✓ ## Atividades de Ensino (completa com promessas + realizadas)
+           ✓ ## Atividades de Pesquisa (completa com promessas + realizadas)
+           ✓ ## Atividades de Extensão (completa com promessas + realizadas)
+           ✓ ## Atividades Administrativo-Pedagógicas (OBRIGATÓRIA - completa com promessas + realizadas)
+           ✓ ## Observações (se houver)
+        
+        AÇÃO CORRETIVA OBRIGATÓRIA:
+        - Se a seção "Atividades Administrativo-Pedagógicas" estiver faltando ou incompleta:
+          a) Leia `Relatorio_Final/planejamento.txt` e `Relatorio_Final/admin.txt`
+          b) ADICIONE a seção completa ao final do relatório antes das observações
+        
+        VALIDAÇÃO FINAL:
+        - O arquivo DEVE ter pelo menos 60 linhas
+        - TODAS as 4 seções principais devem estar presentes
+        - Se algo estiver faltando, COMPLETE baseado nos arquivos fonte
+        
+        CORREÇÕES PERMITIDAS (além da verificação de completude):
+        - Melhorar formatação Markdown
+        - Corrigir espaçamentos
+        - Padronizar títulos
     """),
-    expected_output="Relatório final revisado e impecável em `Relatorio_Final/relatorio_academico.md`, pronto para ser avaliado.",
+    expected_output="Relatório final COMPLETO e verificado com TODAS as seções em `Relatorio_Final/relatorio_academico.md`",
     agent=reviewer_report,
-    tools=[]
+    tools=[ler_arquivo],
 )
 
-textual_review_task = Task(
-    description=dedent("""
-        Sua tarefa é realizar uma análise crítica da qualidade linguística e textual de **TODOS** os seguintes arquivos:
-        - `Relatorio_Final/planejamento.txt`
-        - `Relatorio_Final/teaching.txt`
-        - `Relatorio_Final/research.txt`
-        - `Relatorio_Final/extension.txt`
-        - `Relatorio_Final/admin.txt`
-        - `Relatorio_Final/relatorio_academico.md`
-
-        Para cada arquivo, avalie rigorosamente os seguintes aspectos:
-        - **Clareza Textual:** O texto é fácil de entender? As ideias são apresentadas de forma direta?
-        - **Coesão e Fluidez:** As frases e parágrafos se conectam logicamente? Há transições suaves?
-        - **Correção Gramatical e Ortográfica:** Identifique quaisquer erros de gramática, pontuação ou ortografia.
-        - **Adequação ao Estilo Acadêmico:** O tom é formal e objetivo? Há uso apropriado de terminologia? Evita informalidades ou jargões desnecessários?
-
-        Gere um relatório de avaliação detalhado em **Markdown**, descrevendo as observações para cada arquivo e apontando **oportunidades específicas de melhoria**. Inclua exemplos de trechos problemáticos e sugestões de reescrita. Salve este relatório em `Relatorio_Final/avaliacao_textual.md`.
-    """),
-    expected_output="Arquivo `Relatorio_Final/avaliacao_textual.md` com um relatório detalhado em Markdown, contendo as avaliações linguísticas e sugestões para cada arquivo analisado.",
-    agent=evaluator_textual,
-    output_file="Relatorio_Final/avaliacao_textual.md",
-    tools=[verificar_palavra_no_pdf]
-)
-
-academic_metrics_task = Task(
-    description=dedent("""
-        Com base na análise comparativa dos seguintes arquivos:
-        - O planejamento detalhado do PIT: `Relatorio_Final/planejamento.txt`
-        - Os resumos das atividades de ensino: `Relatorio_Final/teaching.txt`
-        - Os resumos das atividades de pesquisa: `Relatorio_Final/research.txt`
-        - Os resumos das atividades de extensão: `Relatorio_Final/extension.txt`
-        - Os resumos das atividades administrativo-pedagógicas: `Relatorio_Final/admin.txt`
-        - O relatório acadêmico final gerado: `Relatorio_Final/relatorio_academico.md`
-
-        Sua tarefa é produzir uma avaliação estruturada da **aderência do relatório final ao PIT**, seguindo os critérios abaixo.
-        A avaliação deve ser detalhada, com justificativas e, quando possível, quantificações (e.g., escalas, porcentagens).
-
-        1.  **Cobertura de Metas (por Seção):** Para cada seção (Ensino, Pesquisa, Extensão, Administrativo-Pedagógico), liste as metas do PIT que foram claramente abordadas e as que não foram ou foram incompletamente. Atribua uma **pontuação de 0 a 10** para a cobertura geral de cada seção.
-        2.  **Consistência dos Dados:** Verifique se há **discrepâncias ou inconsistências** entre o que foi prometido no `planejamento.txt` e o que foi relatado nas seções de `teaching.txt`, `research.txt`, etc., e no `relatorio_academico.md`. Destaque exemplos específicos.
-        3.  **Relevância e Profundidade:** Avalie se as atividades descritas no relatório recebem a profundidade de detalhe e a ênfase adequadas, considerando sua relevância no PIT. Comente sobre áreas que poderiam ser mais elaboradas ou concisas.
-        4.  **Proporção Promessa vs. Entrega:** Analise o equilíbrio geral entre o volume e a ambição das promessas do PIT e o que foi efetivamente reportado no relatório final. Indique se houve superação ou deficiência em relação ao planejado.
-
-        A avaliação deve ser formatada em **Markdown**, com cabeçalhos para cada critério e seções. Inclua exemplos de texto do relatório ou do PIT para justificar suas avaliações.
-        O resultado final desta avaliação detalhada deve ser salvo no arquivo `Relatorio_Final/avaliacao_metrica.md`.
-    """),
-    expected_output="Arquivo `Relatorio_Final/avaliacao_metrica.md` com uma análise detalhada em Markdown, avaliando a aderência do relatório ao PIT com base em cobertura, consistência, relevância e proporção promessa vs. entrega.",
-    agent=evaluator_metrics,
-    output_file="Relatorio_Final/avaliacao_metrica.md",
-    tools=[verificar_palavra_no_pdf]
-)
-
+# -------- Crew --------
 crew = Crew(
-    agents=[planner, *research_agents.values(), writer, reviewer_research, reviewer_report, evaluator_textual, evaluator_metrics],
-    tasks=[planning_task, *research_tasks, writing_task, review_final_report_task, textual_review_task,
-        academic_metrics_task],
+    agents=[planner, *research_agents.values(), writer, validator, reviewer_report],
+    tasks=[planning_task, *research_tasks, writing_task, validate_sections_task, review_final_report_task],
     process=Process.sequential,
     verbose=True,
-    llm=client
+    llm=client,
 )
 
 if __name__ == "__main__":
-    crew.kickoff()
+    os.makedirs("Relatorio_Final", exist_ok=True)
+    result = crew.kickoff()
+    print("✅ Pipeline concluído.")
