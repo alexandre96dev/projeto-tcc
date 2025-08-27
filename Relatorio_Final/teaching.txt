@@ -1,20 +1,7 @@
-Atividades de Ensino:
-- Banco de Dados (60h total, 3h semanais)
-- Inteligência Artificial (60h total, 3h semanais)
-- Mineração de Dados (60h total, 3h semanais)
-- Tópicos Especiais em Bancos de Dados (60h total, 3h semanais)
-- Projeto de Desenvolvimento de Software Web (30h total, 1,5h semanais)
+O ensino neste semestre foi marcado por um forte compromisso com a inovação e a excelência acadêmica. Os principais destaques incluem:
 
-Atividades de Pesquisa:
-- (sem atividades de pesquisa no PIT)
-
-Atividades de Extensão:
-- Desenvolvimento de Ferramenta de Apoio à Manutenção Industrial (8h semanais)
-
-Atividades Administrativo-Pedagógicas:
-- Link do Núcleo de Inovação Tecnológica (NIT) (1h semanal)
-- Membro do Núcleo de Empreendedorismo (NEI) (1h semanal)
-
-Complemento/Observações:
-- Orientação de estágio de estudantes Álvaro Silva, José Marcos Filho e Matheus Barros
-- Declarações e portarias de apoio ao ensino e atividades administrativas em anexo
+1. O desenvolvimento de aulas dinâmicas e interativas nas disciplinas de Banco de Dados, Inteligência Artificial, Mineração de Dados e Desenvolvimento de Software Web, proporcionando uma experiência enriquecedora para os alunos.
+2. A adoção de metodologias ativas no ensino, o que aumentou a participação e o engajamento dos estudantes.
+3. Um planejamento estruturado que garantiu a entrega eficiente dos conteúdos, permitindo melhor absorção por parte dos alunos.
+4. O suporte contínuo aos estudantes através de monitorias e orientação acadêmica, resultando em um feedback altamente positivo.
+5. O alinhamento curricular com as tendências do mercado de tecnologia, garantindo que os alunos adquiram competências essenciais para suas carreiras.

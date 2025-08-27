@@ -136,10 +136,38 @@ class LerArquivoTextoTool(BaseTool):
     )
 
     def _run(self, file_path: str) -> str:
-        if not os.path.exists(file_path):
-            return ""
-        with open(file_path, "r", encoding="utf-8") as f:
-            return f.read()
+        print(f"🔍 DEBUG LerArquivoTextoTool: Tentando ler arquivo: {file_path}")
+        
+        # Normalizar o caminho para funcionar com diferentes formatos
+        normalized_path = file_path.replace("./", "")
+        
+        if not os.path.exists(normalized_path):
+            print(f"❌ DEBUG: Arquivo não encontrado: {normalized_path}")
+            print(f"📁 DEBUG: Diretório atual: {os.getcwd()}")
+            print("📂 DEBUG: Arquivos no diretório pai do caminho solicitado:")
+            try:
+                parent_dir = os.path.dirname(normalized_path)
+                if parent_dir and os.path.exists(parent_dir):
+                    files = os.listdir(parent_dir)
+                    print(f"   Arquivos encontrados: {files}")
+                else:
+                    print(f"   Diretório pai não existe: {parent_dir}")
+            except Exception as e:
+                print(f"   Erro ao listar diretório: {e}")
+            return f"[ERRO] Arquivo não encontrado: {normalized_path}"
+        
+        try:
+            with open(normalized_path, "r", encoding="utf-8") as f:
+                content = f.read()
+                print(f"✅ DEBUG: Arquivo lido com sucesso. Tamanho: {len(content)} caracteres")
+                if content.strip():
+                    print(f"📄 DEBUG: Primeiros 100 caracteres: {content[:100]}...")
+                else:
+                    print("📄 DEBUG: Arquivo está vazio")
+                return content
+        except Exception as e:
+            print(f"❌ DEBUG: Erro ao ler arquivo: {str(e)}")
+            return f"[ERRO] Falha ao ler arquivo: {str(e)}"
 
 
 class LerJSONTool(BaseTool):

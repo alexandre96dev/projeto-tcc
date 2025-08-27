@@ -33,15 +33,9 @@ def _completion_no_stop(**params):
 # aplica o patch globalmente antes de qualquer chamada
 litellm.completion = _completion_no_stop
 # ------------------------------------------------------------------------------------
-
-REPLICATE_MODEL = os.getenv(
-    "REPLICATE_MODEL_SLUG",
-    "replicate/meta/meta-llama-3-70b-instruct"
-)
-
 # Usar Ollama local que é mais estável
 client = LLM(
-    model=REPLICATE_MODEL,
+    model="replicate/openai/gpt-4o-mini",
     api_key='r8_MPjPwXOOQ4ZORa5teY6esvCY6AfJr2p1frYPn',
     # Pode manter estes sem problemas; o patch acima garante remoção se aparecerem
     drop_params=["stop"],
@@ -192,34 +186,12 @@ validator = Agent(
 # -------- Tasks --------
 
 planning_task = Task(
-    description=dedent("""
-        PRIMEIRO: Execute `LerArquivoTextoTool` com file_path="./Planejamento/PIT.md"
-
-        SEGUNDO: Do conteúdo lido, extraia e escreva EXATAMENTE o conteudo do arquivo lido:
-        Atividades de Ensino:
-        - Banco de Dados (60h total, 3h semanais)
-        - Inteligência Artificial (60h total, 3h semanais)
-        - Mineração de Dados (60h total, 3h semanais)
-        - Tópicos Especiais em Bancos de Dados (60h total, 3h semanais)
-        - Projeto de Desenvolvimento de Software Web (30h total, 1,5h semanais)
-
-        Atividades de Pesquisa:
-        - (sem atividades de pesquisa no PIT)
-
-        Atividades de Extensão:
-        - Desenvolvimento de Ferramenta de Apoio à Manutenção Industrial (8h semanais)
-
-        Atividades Administrativo-Pedagógicas:
-        - Link do Núcleo de Inovação Tecnológica (NIT) (1h semanal)
-        - Membro do Núcleo de Empreendedorismo (NEI) (1h semanal)
-
-        Complemento/Observações:
-        - Orientação de estágio de estudantes Álvaro Silva, José Marcos Filho e Matheus Barros
-        - Declarações e portarias de apoio ao ensino e atividades administrativas em anexo
+    description="""
+        Execute APENAS: LerArquivoTextoTool com file_path="./Planejamento/PIT.md"
         
-        IMPORTANTE: Use EXATAMENTE este texto, copiando literalmente as informações do PIT.md.
-    """),
-    expected_output="Arquivo `Relatorio_Final/planejamento.txt` com conteúdo literal do PIT.md.",
+        Retorne EXATAMENTE o conteúdo lido, sem modificações.
+    """,
+    expected_output="Conteúdo completo do arquivo ./Planejamento/PIT.md",
     agent=planner,
     output_file="Relatorio_Final/planejamento.txt",
     tools=[ler_arquivo],
@@ -227,34 +199,23 @@ planning_task = Task(
 
 # arquivos de entrada
 sections = {
-    "teaching": "./ENSINO/ensino.txt",
-    "research": "./PESQUISA/pesquisa.txt",
-    "extension": "./EXTENSAO/extensao.txt",
-    "admin": "./ADMINISTRATIVO_PEDAGOGICO/admin.txt",
+    "teaching": "ENSINO/ensino.txt",
+    "research": "PESQUISA/pesquisa.txt",
+    "extension": "EXTENSAO/extensao.txt",
+    "admin": "ADMINISTRATIVO_PEDAGOGICO/admin.txt",
 }
 
 research_tasks = []
 for section, file_path in sections.items():
     research_tasks.append(
         Task(
-            description=dedent(f"""
-                TAREFA ESPECÍFICA: Extrair conteúdo do arquivo {file_path}
+            description=f"""
+                Execute APENAS: LerArquivoTextoTool com file_path="{file_path}"
                 
-                INSTRUÇÕES OBRIGATÓRIAS:
-                1. Execute SOMENTE: `LerArquivoTextoTool` com file_path="{file_path}"
-                2. Se o arquivo contém texto: COPIE TODO O CONTEÚDO COMPLETO sem cortar ou resumir
-                3. Se o arquivo está vazio: escreva exatamente "sem informações"
-                4. Se o arquivo não existe: escreva exatamente "sem informações"
-                
-                IMPORTANTE: 
-                - Copie o conteúdo COMPLETO sem truncar
-                - NÃO misture informações de outros arquivos
-                - NÃO use contexto de tarefas anteriores
-                - Este arquivo deve conter APENAS o conteúdo de "{file_path}"
-                
-                VALIDAÇÃO: O arquivo final deve ser uma cópia exata do conteúdo de "{file_path}"
-            """),
-            expected_output=f"Arquivo `Relatorio_Final/{section}.txt` contendo EXCLUSIVAMENTE o conteúdo completo de {file_path}",
+                Retorne EXATAMENTE o conteúdo lido, sem modificações.
+                Se houver erro, retorne a mensagem de erro.
+            """,
+            expected_output=f"Conteúdo completo do arquivo {file_path}",
             agent=research_agents[section],
             output_file=f"Relatorio_Final/{section}.txt",
             tools=[ler_arquivo],
@@ -262,74 +223,34 @@ for section, file_path in sections.items():
     )
 
 writing_task = Task(
-    description=dedent("""
-        GERAÇÃO DE RELATÓRIO COMPLETO - SIGA RIGOROSAMENTE ESTA SEQUÊNCIA:
-        
-        ETAPA 1 - LEITURA OBRIGATÓRIA (use LerArquivoTextoTool para CADA arquivo):
-        1. Leia `Relatorio_Final/planejamento.txt`
-        2. Leia `Relatorio_Final/teaching.txt`
-        3. Leia `Relatorio_Final/research.txt`
-        4. Leia `Relatorio_Final/extension.txt`
-        5. Leia `Relatorio_Final/admin.txt`
-        
-        ETAPA 2 - COMPILAÇÃO DO RELATÓRIO COMPLETO:
-        Crie um relatório com TODAS as seções abaixo (formato Markdown):
+    description="""
+        1. Leia cada arquivo com LerArquivoTextoTool:
+           - Relatorio_Final/planejamento.txt
+           - Relatorio_Final/teaching.txt  
+           - Relatorio_Final/research.txt
+           - Relatorio_Final/extension.txt
+           - Relatorio_Final/admin.txt
 
-        # Relatório Acadêmico
-
-        ## Atividades de Ensino
-        **Promessas do PIT:**
-        ESCREVA LITERALMENTE o conteudo da seção "Atividades de Ensino:" completa do arquivo planejamento.txt
-        
-        **Atividades realizadas:**
-        ESCREVA LITERALMENTE todo o conteúdo do arquivo teaching.txt - se vazio, escreva "sem informações"
-
-        ## Atividades de Pesquisa
-        **Promessas do PIT:**
-        ESCREVA LITERALMENTE a seção "Atividades de Pesquisa:" completa do arquivo planejamento.txt
-        
-        **Atividades realizadas:**
-        ESCREVA LITERALMENTE todo o conteúdo do arquivo research.txt - se vazio, escreva "sem informações"
-
-        ## Atividades de Extensão
-        **Promessas do PIT:**
-        ESCREVA LITERALMENTE a seção "Atividades de Extensão:" completa do arquivo planejamento.txt
-        
-        **Atividades realizadas:**
-        ESCREVA LITERALMENTE todo o conteúdo do arquivo extension.txt - se vazio, escreva "sem informações"
-
-        ## Atividades Administrativo-Pedagógicas
-        **Promessas do PIT:**
-        ESCREVA LITERALMENTE a seção "Atividades Administrativo-Pedagógicas:" completa do arquivo planejamento.txt
-        
-        **Atividades realizadas:**
-        ESCREVA LITERALMENTE todo o conteúdo do arquivo admin.txt - se vazio, escreva "sem informações"
-
-        ## Observações e Complementos
-        ESCREVA LITERALMENTE a seção "Complemento/Observações" do arquivo planejamento.txt se existir
-        
-        IMPORTANTE:
-        - NÃO use placeholders como "( contents of ... )" EM NENHUMA CIRCUNSTÂNCIA
-        - ESCREVA o conteúdo real de cada arquivo que você leu com LerArquivoTextoTool
-        - Substitua os textos pelos dados reais que você leu
-        - Se um arquivo estiver vazio, escreva "sem informações"
-        - NUNCA deixe texto como "( contents of teaching.txt )" no resultado final
-        
-        EXEMPLO DO QUE NÃO FAZER:
-        **Atividades realizadas:**
-        ( contents of teaching.txt )
-        
-        EXEMPLO DO QUE FAZER:
-        **Atividades realizadas:**
-        O ensino neste semestre foi marcado por... [conteúdo real do arquivo]
-        
-        VALIDAÇÃO OBRIGATÓRIA:
-        - O arquivo DEVE ter EXATAMENTE 4 seções principais: Ensino, Pesquisa, Extensão, Administrativo-Pedagógicas
-        - Se alguma seção estiver faltando, RECRIE ela com base nos arquivos lidos
-        - O arquivo final deve ter pelo menos 60 linhas para estar completo
-        - NÃO termine o arquivo antes da seção Administrativo-Pedagógicas estar completa
-    """),
-    expected_output="Arquivo `Relatorio_Final/relatorio_academico.md` COMPLETO com TODAS as 4 seções obrigatórias incluindo Administrativo-Pedagógicas",
+        2. Crie um relatório Markdown com estas seções:
+           # Relatório Acadêmico
+           
+           ## Atividades de Ensino
+           **Promessas do PIT:** [extrair do planejamento.txt]
+           **Atividades realizadas:** [conteúdo de teaching.txt]
+           
+           ## Atividades de Pesquisa  
+           **Promessas do PIT:** [extrair do planejamento.txt]
+           **Atividades realizadas:** [conteúdo de research.txt]
+           
+           ## Atividades de Extensão
+           **Promessas do PIT:** [extrair do planejamento.txt] 
+           **Atividades realizadas:** [conteúdo de extension.txt]
+           
+           ## Atividades Administrativo-Pedagógicas
+           **Promessas do PIT:** [extrair do planejamento.txt]
+           **Atividades realizadas:** [conteúdo de admin.txt]
+    """,
+    expected_output="Relatório completo em Relatorio_Final/relatorio_academico.md",
     agent=writer,
     output_file="Relatorio_Final/relatorio_academico.md",
     tools=[ler_arquivo],
@@ -407,8 +328,8 @@ review_final_report_task = Task(
 
 # -------- Crew --------
 crew = Crew(
-    agents=[planner, *research_agents.values(), writer, validator, reviewer_report],
-    tasks=[planning_task, *research_tasks, writing_task, validate_sections_task, review_final_report_task],
+    agents=[planner, *research_agents.values(), writer],
+    tasks=[planning_task, *research_tasks, writing_task],
     process=Process.sequential,
     verbose=True,
     llm=client,
