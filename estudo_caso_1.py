@@ -18,6 +18,7 @@ import litellm
 from crewai import Agent, Crew, LLM, Process, Task
 from crewai.tools import BaseTool
 from pydantic import BaseModel, Field
+from docx import Document
 
 
 
@@ -67,11 +68,11 @@ class ResultadoAnalise:
 class LeitorPDF(Protocol):
     
     def extrair_texto_completo(self, caminho_arquivo: str) -> str:
-        """Extrai todo o texto do PDF"""
+        """Extrai todo o texto do arquivo"""
         ...
     
     def extrair_texto_por_paginas(self, caminho_arquivo: str) -> Tuple[str, List[str]]:
-        """Extrai texto separado por páginas"""
+        """Extrai texto separado por páginas/seções"""
         ...
 
 
@@ -107,41 +108,80 @@ class GeradorRelatorio(Protocol):
 # IMPLEMENTAÇÕES CONCRETAS
 # =============================================================================
 
-class LeitorPDFPyMuPDF:
-    """Implementação concreta do leitor de PDF usando PyMuPDF"""
+class LeitorDocumentoPyMuPDF:
+    """Implementação concreta do leitor de documentos usando PyMuPDF para PDF e python-docx para DOCX"""
     
     def extrair_texto_completo(self, caminho_arquivo: str) -> str:
-        """Extrai todo o texto do PDF como uma string única"""
+        """Extrai todo o texto do documento como uma string única"""
         if not self._validar_arquivo_existe(caminho_arquivo):
             raise FileNotFoundError(f"Arquivo '{caminho_arquivo}' não encontrado")
         
         try:
-            with fitz.open(caminho_arquivo) as documento:
-                textos_paginas = [pagina.get_text() for pagina in documento]
-                texto_completo = "\n".join(textos_paginas)
+            # Determinar o tipo de arquivo
+            if caminho_arquivo.lower().endswith('.docx'):
+                return self._extrair_texto_docx(caminho_arquivo)
+            elif caminho_arquivo.lower().endswith('.pdf'):
+                return self._extrair_texto_pdf(caminho_arquivo)
+            else:
+                raise ValueError(f"Formato de arquivo não suportado: {caminho_arquivo}")
                 
-                if not texto_completo.strip():
-                    raise ValueError(f"Arquivo '{caminho_arquivo}' está vazio ou não contém texto extraível")
-                
-                return texto_completo
-                
-        except ImportError:
-            raise ImportError("PyMuPDF não instalado. Instale com: pip install PyMuPDF")
+        except ImportError as e:
+            if 'docx' in str(e):
+                raise ImportError("python-docx não instalado. Instale com: pip install python-docx")
+            else:
+                raise ImportError("PyMuPDF não instalado. Instale com: pip install PyMuPDF")
         except Exception as e:
-            raise RuntimeError(f"Erro ao ler arquivo PDF '{caminho_arquivo}': {str(e)}")  # Use RuntimeError instead of generic Exception
+            raise RuntimeError(f"Erro ao ler arquivo '{caminho_arquivo}': {str(e)}")
     
     def extrair_texto_por_paginas(self, caminho_arquivo: str) -> Tuple[str, List[str]]:
-        """Extrai texto separado por páginas"""
+        """Extrai texto separado por páginas/parágrafos"""
         if not self._validar_arquivo_existe(caminho_arquivo):
             raise FileNotFoundError(f"Arquivo '{caminho_arquivo}' não encontrado")
         
         try:
-            with fitz.open(caminho_arquivo) as documento:
-                paginas = [pagina.get_text() for pagina in documento]
-                texto_completo = "\n".join(paginas)
-                return texto_completo, paginas
+            if caminho_arquivo.lower().endswith('.docx'):
+                return self._extrair_texto_docx_por_paragrafos(caminho_arquivo)
+            elif caminho_arquivo.lower().endswith('.pdf'):
+                return self._extrair_texto_pdf_por_paginas(caminho_arquivo)
+            else:
+                raise ValueError(f"Formato de arquivo não suportado: {caminho_arquivo}")
         except Exception as e:
-            raise RuntimeError(f"Erro ao extrair páginas do PDF '{caminho_arquivo}': {str(e)}")  # Use RuntimeError instead of generic Exception
+            raise RuntimeError(f"Erro ao extrair seções do arquivo '{caminho_arquivo}': {str(e)}")
+    
+    def _extrair_texto_docx(self, caminho_arquivo: str) -> str:
+        """Extrai texto de arquivo DOCX"""
+        doc = Document(caminho_arquivo)
+        paragrafos = [paragrafo.text for paragrafo in doc.paragraphs if paragrafo.text.strip()]
+        
+        if not paragrafos:
+            raise ValueError(f"Arquivo '{caminho_arquivo}' está vazio ou não contém texto extraível")
+        
+        return "\n".join(paragrafos)
+    
+    def _extrair_texto_docx_por_paragrafos(self, caminho_arquivo: str) -> Tuple[str, List[str]]:
+        """Extrai texto de DOCX separado por parágrafos"""
+        doc = Document(caminho_arquivo)
+        paragrafos = [paragrafo.text for paragrafo in doc.paragraphs if paragrafo.text.strip()]
+        texto_completo = "\n".join(paragrafos)
+        return texto_completo, paragrafos
+    
+    def _extrair_texto_pdf(self, caminho_arquivo: str) -> str:
+        """Extrai texto de arquivo PDF"""
+        with fitz.open(caminho_arquivo) as documento:
+            textos_paginas = [pagina.get_text() for pagina in documento]
+            texto_completo = "\n".join(textos_paginas)
+            
+            if not texto_completo.strip():
+                raise ValueError(f"Arquivo '{caminho_arquivo}' está vazio ou não contém texto extraível")
+            
+            return texto_completo
+    
+    def _extrair_texto_pdf_por_paginas(self, caminho_arquivo: str) -> Tuple[str, List[str]]:
+        """Extrai texto de PDF separado por páginas"""
+        with fitz.open(caminho_arquivo) as documento:
+            paginas = [pagina.get_text() for pagina in documento]
+            texto_completo = "\n".join(paginas)
+            return texto_completo, paginas
     
     @staticmethod
     def _validar_arquivo_existe(caminho: str) -> bool:
@@ -158,6 +198,7 @@ class ProcessadorJSONInteligente:
             self._extrair_json_com_marcadores,
             self._extrair_json_com_codigo_block,
             self._extrair_ultimo_objeto_balanceado,
+            self._extrair_json_com_placeholders,
             self._extrair_json_puro
         ]
         
@@ -225,6 +266,33 @@ class ProcessadorJSONInteligente:
                 pass
         return None
     
+    def _extrair_json_com_placeholders(self, texto: str) -> Optional[Dict]:
+        """Tenta detectar e completar JSONs com placeholders como [...]"""
+        # Verifica se há estrutura JSON com placeholders
+        if "[...]" in texto or "..." in texto:
+            # Busca por estrutura básica que contém as seções esperadas
+            padrao_estrutura = r'\{\s*"erros_gramaticais".*?"necessidades_citacao".*?"melhorias_clareza".*?\}'
+            match = re.search(padrao_estrutura, texto, re.DOTALL | re.IGNORECASE)
+            
+            if match:
+                json_texto = match.group(0)
+                # Substitui placeholders por arrays vazios
+                json_texto = re.sub(r'\[\.\.\.?\]', '[]', json_texto)
+                json_texto = re.sub(r'\.\.\.', '', json_texto)
+                
+                # Tenta parsear o JSON corrigido
+                try:
+                    return json.loads(json_texto)
+                except json.JSONDecodeError:
+                    # Se ainda há erro, cria estrutura mínima válida
+                    return {
+                        "erros_gramaticais": [],
+                        "necessidades_citacao": [],
+                        "melhorias_clareza": []
+                    }
+        
+        return None
+
     def _extrair_json_puro(self, texto: str) -> Optional[Dict]:
         """Tenta parsear o texto inteiro como JSON"""
         try:
@@ -270,16 +338,59 @@ class ValidadorConteudoPDF:
     
     def _localizar_pagina_do_trecho(self, trecho: str, paginas: List[str]) -> Optional[int]:
         """Localiza em qual página está um trecho específico"""
-        trecho_normalizado = " ".join(trecho.split())[:3000]
-        
+        # Use a robust normalization: remove diacritics, punctuation, collapse whitespace, lowercase
+        import unicodedata
+        from difflib import SequenceMatcher
+
+        def _normalize(text: str) -> str:
+            if not text:
+                return ""
+            # Normalize unicode and remove combining marks (accents)
+            text = unicodedata.normalize('NFKD', text)
+            text = ''.join(ch for ch in text if not unicodedata.combining(ch))
+            # Lowercase
+            text = text.lower()
+            # Replace punctuation with spaces, keep alphanumerics and whitespace
+            text = re.sub(r"[^\w\s]", " ", text)
+            # Collapse whitespace
+            text = " ".join(text.split())
+            return text
+
+        trecho_normalizado = _normalize(trecho)[:2000]
+
         if not trecho_normalizado:
             return None
-        
+
+        # First try exact containment on normalized text
         for indice, texto_pagina in enumerate(paginas):
-            pagina_normalizada = " ".join(texto_pagina.split())
+            pagina_normalizada = _normalize(texto_pagina)
             if trecho_normalizado in pagina_normalizada:
                 return indice + 1  # Páginas começam em 1
-        
+
+        # Fallback: fuzzy match using SequenceMatcher. This handles small differences/typos.
+        for indice, texto_pagina in enumerate(paginas):
+            pagina_normalizada = _normalize(texto_pagina)
+            # Compute overall similarity
+            try:
+                ratio = SequenceMatcher(None, trecho_normalizado, pagina_normalizada).ratio()
+            except Exception:
+                ratio = 0.0
+
+            # If reasonably similar, accept
+            if ratio >= 0.70:
+                return indice + 1
+
+            # Also try matching a shorter slice (first 200 chars) of the trecho to the page
+            slice_trecho = trecho_normalizado[:200]
+            if slice_trecho:
+                try:
+                    slice_ratio = SequenceMatcher(None, slice_trecho, pagina_normalizada).ratio()
+                except Exception:
+                    slice_ratio = 0.0
+
+                if slice_ratio >= 0.75:
+                    return indice + 1
+
         return None
     
     def _converter_dict_para_problema(self, problema_dict: Dict, pagina: int) -> ProblemaEncontrado:
@@ -371,13 +482,15 @@ class FabricaModelos:
     CONFIGURACOES_PADRAO = {
         ModelType.LLAMA_7B: ConfiguracaoModelo(
             model_name="replicate/meta/meta-llama-3-8b-instruct",
-            display_name="Llama 8B",
+            display_name="Llama 7B",
             api_key=os.getenv('REPLICATE_API_TOKEN', 'r8_MPjPwXOOQ4ZORa5teY6esvCY6AfJr2p1frYPn')
         ),
         ModelType.LLAMA_70B: ConfiguracaoModelo(
             model_name="replicate/meta/meta-llama-3-70b-instruct",
             display_name="Llama 70B",
-            api_key=os.getenv('REPLICATE_API_TOKEN', 'r8_MPjPwXOOQ4ZORa5teY6esvCY6AfJr2p1frYPn')
+            api_key=os.getenv('REPLICATE_API_TOKEN', 'r8_MPjPwXOOQ4ZORa5teY6esvCY6AfJr2p1frYPn'),
+            temperature=0.2,
+            max_tokens=8192
         ),
         ModelType.CHATGPT: ConfiguracaoModelo(
             model_name="replicate/openai/gpt-4o-mini",
@@ -410,28 +523,28 @@ class FabricaModelos:
 # FERRAMENTAS DO CREWAI
 # =============================================================================
 
-class ArgumentosLeituraPDF(BaseModel):
-    """Argumentos para ferramenta de leitura de PDF"""
-    pdf_path: str = Field(..., description="Caminho do arquivo PDF a ser lido")
+class ArgumentosLeituraDocumento(BaseModel):
+    """Argumentos para ferramenta de leitura de documentos"""
+    pdf_path: str = Field(..., description="Caminho do arquivo de documento a ser lido (PDF ou DOCX)")
 
 
-class FerramentaLeituraPDF(BaseTool):
-    """Ferramenta do CrewAI para leitura de PDFs"""
+class FerramentaLeituraDocumento(BaseTool):
+    """Ferramenta do CrewAI para leitura de documentos"""
     
     name: str = "LerTextoPDFTool"
     description: str = (
-        "Lê o conteúdo de um arquivo PDF e retorna o texto extraído. "
+        "Lê o conteúdo de um arquivo de documento (PDF ou DOCX) e retorna o texto extraído. "
         "Use passando um dicionário com a chave 'pdf_path', por ex.: "
-        '{"pdf_path": "publichealth-2021-2-e24585.pdf"}'
+        '{"pdf_path": "texto_estudo_caso1.docx"}'
     )
-    args_schema: Type[BaseModel] = ArgumentosLeituraPDF
+    args_schema: Type[BaseModel] = ArgumentosLeituraDocumento
     
     def __init__(self, leitor_pdf: LeitorPDF):
         super().__init__()
         self._leitor_pdf = leitor_pdf
     
     def _run(self, pdf_path: str) -> str:
-        """Executa a leitura do PDF"""
+        """Executa a leitura do documento"""
         try:
             return self._leitor_pdf.extrair_texto_completo(pdf_path)
         except FileNotFoundError as e:
@@ -441,7 +554,7 @@ class FerramentaLeituraPDF(BaseTool):
         except ImportError as e:
             return f"Erro: {str(e)}"
         except Exception as e:
-            return f"Erro ao ler arquivo PDF: {str(e)}"
+            return f"Erro ao ler arquivo de documento: {str(e)}"
 
 
 # =============================================================================
@@ -452,7 +565,7 @@ class FabricaAgentes:
     """Factory para criação de agentes especializados"""
     
     @staticmethod
-    def criar_agente_analise_textual(modelo: LLM, ferramenta_pdf: FerramentaLeituraPDF) -> Agent:
+    def criar_agente_analise_textual(modelo: LLM, ferramenta_documento: FerramentaLeituraDocumento) -> Agent:
         """Cria agente especializado em análise textual"""
         return Agent(
             role="Especialista em Análise Textual Acadêmica",
@@ -465,7 +578,7 @@ class FabricaAgentes:
             - Padrões de escrita científica
             """,
             verbose=True,
-            tools=[ferramenta_pdf],
+            tools=[ferramenta_documento],
             llm=modelo,
             max_iter=3,
             max_execution_time=300,
@@ -495,48 +608,50 @@ class FabricaTarefas:
     """Factory para criação de tarefas especializadas"""
     
     @staticmethod
-    def criar_tarefa_analise(agente: Agent, ferramenta_pdf: FerramentaLeituraPDF, caminho_arquivo: str) -> Task:
+    def criar_tarefa_analise(agente: Agent, ferramenta_documento: FerramentaLeituraDocumento, caminho_arquivo: str, texto_documento: Optional[str] = None) -> Task:
         """Cria tarefa de análise textual"""
+        # Build base description
+        base_desc = (
+            f"VOCÊ SÓ PODE USAR O CONTEÚDO DO ARQUIVO '{caminho_arquivo}'.\n"
+            "NÃO invente exemplos, não use conhecimento externo, não infira conteúdo que não esteja literalmente no documento.\n"
+            "Se não encontrar algo, devolva listas vazias.\n\n"
+            f"1) **OBRIGATÓRIO**: Leia o documento usando a ferramenta LerTextoPDFTool (passe EXATAMENTE: {{\"pdf_path\": \"{caminho_arquivo}\"}}).\n"
+            "   VOCÊ DEVE USAR A FERRAMENTA ANTES DE FAZER QUALQUER ANÁLISE.\n\n"
+            "2) Analise APENAS o texto lido e identifique:\n"
+            "   - ERROS GRAMATICAIS (problemas de ortografia, gramática ou estilo/clareza acadêmica).\n"
+            "   - NECESSIDADES DE CITAÇÃO (apenas se houver afirmações no documento sem referência explícita).\n"
+            "   - MELHORIAS DE CLAREZA (frases ambíguas, transições fracas, jargões não explicados).\n\n"
+            "3) Para CADA problema encontrado, você DEVE:\n"
+            "   - Copiar o **trecho exato** do documento (curto, até ~250 caracteres) no campo \"trecho_exato\".\n"
+            "   - Informar a **localização** (ex.: \"Introdução\", \"Metodologia\", \"Resultados\", \"Conclusão\"... ou \"parágrafo X da seção Y\").\n"
+            "   - Descrever o problema em \"descricao\".\n"
+            "   - Sugerir uma correção em \"sugestao\".\n"
+            "   - Estimar \"gravidade\" (baixa|média|alta).\n\n"
+            "4) **SAÍDA OBRIGATÓRIA**: retorne APENAS um objeto JSON (sem nenhum outro texto) no formato:\n"
+            "{\n  \"erros_gramaticais\": [\n    {\"localizacao\": \"...\", \"trecho_exato\": \"...\", \"descricao\": \"...\", \"sugestao\": \"...\", \"gravidade\": \"...\" }\n  ],\n"
+            "  \"necessidades_citacao\": [\n    {\"localizacao\": \"...\", \"trecho_exato\": \"...\", \"descricao\": \"...\", \"sugestao\": \"...\", \"gravidade\": \"...\" }\n  ],\n"
+            "  \"melhorias_clareza\": [\n    {\"localizacao\": \"...\", \"trecho_exato\": \"...\", \"descricao\": \"...\", \"sugestao\": \"...\", \"gravidade\": \"...\" }\n  ]\n}\n\n"
+            "REGRAS:\n"
+            "- \"trecho_exato\" DEVE existir literalmente no documento. Se não tiver certeza, NÃO inclua o item.\n"
+            "- Se nada for encontrado em alguma seção, use lista vazia [].\n\n"
+            "IMPORTANTE: Se houver erro na leitura do arquivo, retorne a mensagem de erro exata.\n"
+        )
+
+        # If texto_documento is provided, append a trimmed fallback block so models that don't call tools still have the content
+        if texto_documento:
+            trimmed = texto_documento.strip()
+            if len(trimmed) > 20000:
+                trimmed = trimmed[:20000] + "\n...[TRIMMED]"
+            fallback_block = "\n\n--- INÍCIO DO TEXTO DO DOCUMENTO (FALLBACK) ---\n" + trimmed + "\n--- FIM DO TEXTO DO DOCUMENTO ---\n"
+            description = base_desc + fallback_block
+        else:
+            description = base_desc
+
         return Task(
-            description=f"""
-            VOCÊ SÓ PODE USAR O CONTEÚDO DO ARQUIVO PDF '{caminho_arquivo}'.
-            NÃO invente exemplos, não use conhecimento externo, não infira conteúdo que não esteja literalmente no PDF.
-            Se não encontrar algo, devolva listas vazias.
-            
-            1) Leia o PDF usando a ferramenta LerTextoPDFTool (passe EXATAMENTE: {{"pdf_path": "{caminho_arquivo}"}}).
-            2) Analise o texto e identifique:
-               - ERROS GRAMATICAIS (em inglês, pois o artigo está em inglês) ou problemas de estilo/clareza acadêmica.
-               - NECESSIDADES DE CITAÇÃO (apenas se houver afirmações no PDF sem referência explícita).
-               - MELHORIAS DE CLAREZA (frases ambíguas, transições fracas, jargões não explicados).
-            
-            3) Para CADA problema encontrado, você DEVE:
-               - Copiar o **trecho exato** do PDF (curto, até ~250 caracteres) no campo "trecho_exato".
-               - Informar a **localização** (ex.: "Abstract", "Introduction", "Methods", "Results", "Discussion"... ou "parágrafo X da seção Y").
-               - Descrever o problema em "descricao".
-               - Sugerir uma correção em "sugestao".
-               - Estimar "gravidade" (baixa|média|alta).
-            
-            4) **SAÍDA OBRIGATÓRIA**: retorne APENAS um objeto JSON (sem nenhum outro texto) no formato:
-            {{
-              "erros_gramaticais": [
-                {{"localizacao": "...", "trecho_exato": "...", "descricao": "...", "sugestao": "...", "gravidade": "..." }}
-              ],
-              "necessidades_citacao": [
-                {{"localizacao": "...", "trecho_exato": "...", "descricao": "...", "sugestao": "...", "gravidade": "..." }}
-              ],
-              "melhorias_clareza": [
-                {{"localizacao": "...", "trecho_exato": "...", "descricao": "...", "sugestao": "...", "gravidade": "..." }}
-              ]
-            }}
-            REGRAS:
-            - "trecho_exato" DEVE existir literalmente no PDF. Se não tiver certeza, NÃO inclua o item.
-            - Se nada for encontrado em alguma seção, use lista vazia [].
-            
-            IMPORTANTE: Se houver erro na leitura do arquivo, retorne a mensagem de erro exata.
-            """,
+            description=description,
             expected_output="Lista detalhada de problemas encontrados com localizações e sugestões de correção",
             agent=agente,
-            tools=[ferramenta_pdf]
+            tools=[ferramenta_documento]
         )
 
 
@@ -571,11 +686,17 @@ class ServicoAnaliseTexto:
             modelo = FabricaModelos.criar_modelo(tipo_modelo)
             nome_modelo = FabricaModelos.obter_nome_exibicao(tipo_modelo)
             
-            ferramenta_pdf = FerramentaLeituraPDF(self._leitor_pdf)
-            agente_analise = FabricaAgentes.criar_agente_analise_textual(modelo, ferramenta_pdf)
-            
-            # Criar e executar tarefa
-            tarefa_analise = FabricaTarefas.criar_tarefa_analise(agente_analise, ferramenta_pdf, caminho_arquivo)
+            ferramenta_documento = FerramentaLeituraDocumento(self._leitor_pdf)
+            agente_analise = FabricaAgentes.criar_agente_analise_textual(modelo, ferramenta_documento)
+
+            # Extrair texto do documento como fallback para modelos que não chamam ferramentas
+            try:
+                texto_documento = self._leitor_pdf.extrair_texto_completo(caminho_arquivo)
+            except Exception:
+                texto_documento = None
+
+            # Criar e executar tarefa (inclui fallback com texto completo do documento)
+            tarefa_analise = FabricaTarefas.criar_tarefa_analise(agente_analise, ferramenta_documento, caminho_arquivo, texto_documento)
             
             crew = Crew(
                 agents=[agente_analise],
@@ -636,7 +757,7 @@ class GerenciadorEstudoCaso:
         self._gerador_relatorio = gerador_relatorio
         self._diretorio_resultados = Path("resultados_estudo_caso")
     
-    def executar_estudo_completo(self, caminho_arquivo: str = "publichealth-2021-2-e24585.pdf"):
+    def executar_estudo_completo(self, caminho_arquivo: str = "texto_estudo_caso1.docx"):
         """Executa estudo de caso completo com todos os modelos"""
         print("🚀 INICIANDO ESTUDO DE CASO 1 - ANÁLISE DE TEXTO CIENTÍFICO")
         print("📋 Conforme especificações do professor:")
@@ -656,7 +777,8 @@ class GerenciadorEstudoCaso:
             print("=" * 60)
             
             resultado, erro = self._servico_analise.analisar_documento(tipo_modelo, caminho_arquivo)
-            
+
+            # If analysis succeeded, save the normal report. If it failed, still create a debug report
             if resultado:
                 caminho_relatorio = self._salvar_relatorio_individual(resultado, tipo_modelo)
                 resultados_sucesso[tipo_modelo] = {
@@ -666,12 +788,36 @@ class GerenciadorEstudoCaso:
                 }
                 print(f"✅ {nome_modelo}: Concluído com sucesso")
             else:
+                # Create a minimal debug report for failed runs so the file exists and contains the error
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                nome_arquivo = f"relatorio_{tipo_modelo.value}_{timestamp}_FAILED.md"
+                caminho_arquivo_saida = self._diretorio_resultados / nome_arquivo
+
+                linhas = [
+                    f"# Relatório (FALHA) - {nome_modelo}",
+                    "",
+                    f"**Arquivo analisado:** {caminho_arquivo}",
+                    f"**Data:** {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}",
+                    "",
+                    "## Erro",
+                    "",
+                    f"{erro}",
+                    "",
+                    "## Observações para debug",
+                    "",
+                    "- Verifique o raw output do modelo e o log de execução.",
+                ]
+
+                with open(caminho_arquivo_saida, 'w', encoding='utf-8') as f:
+                    f.write('\n'.join(linhas))
+
                 resultados_sucesso[tipo_modelo] = {
                     "resultado": None,
-                    "arquivo": None,
+                    "arquivo": str(caminho_arquivo_saida),
                     "status": f"❌ Falhou: {erro}"
                 }
-                print(f"❌ {nome_modelo}: {erro}")
+
+                print(f"❌ {nome_modelo}: {erro} - relatório de debug salvo em {caminho_arquivo_saida}")
         
         # Gerar relatório consolidado
         self._gerar_relatorio_consolidado(resultados_sucesso, caminho_arquivo)
@@ -683,7 +829,7 @@ class GerenciadorEstudoCaso:
     
     def _garantir_diretorio_resultados(self):
         """Garante que o diretório de resultados existe"""
-        self._diretorio_resultados.mkdir(exist_ok=True)
+        self._diretorio_resultados.mkdir(parents=True, exist_ok=True)
     
     def _salvar_relatorio_individual(self, resultado: ResultadoAnalise, tipo_modelo: ModelType) -> str:
         """Salva relatório individual de um modelo"""
@@ -756,7 +902,7 @@ def main():
     ConfiguradorLiteLLM.aplicar_patch_parametros()
     
     # Criar dependências
-    leitor_pdf = LeitorPDFPyMuPDF()
+    leitor_pdf = LeitorDocumentoPyMuPDF()
     processador_json = ProcessadorJSONInteligente()
     validador_conteudo = ValidadorConteudoPDF(leitor_pdf)
     gerador_relatorio = GeradorRelatorioMarkdown()
