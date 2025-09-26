@@ -444,7 +444,6 @@ class GeradorRelatorioMarkdown:
         
         for indice, problema in enumerate(problemas, 1):
             linhas.extend([
-                f"**{indice}. Localização:** página {problema.pagina}, {problema.localizacao}",
                 f"- **Trecho exato:** \"{problema.trecho_exato}\"",
                 f"- **Problema:** {problema.descricao}",
                 f"- **Sugestão:** {problema.sugestao}",
