@@ -115,8 +115,8 @@ class LeitorDocumentosMultiFormato:
             if arquivo.is_file() and arquivo.suffix.lower() in self.EXTENSOES_SUPORTADAS:
                 arquivos_encontrados.append(str(arquivo))
         
-        if len(arquivos_encontrados) < 2:
-            raise ValueError(f"Encontrados apenas {len(arquivos_encontrados)} arquivos suportados. Mínimo: 2")
+        if len(arquivos_encontrados) < 1:
+            raise ValueError(f"Encontrados apenas {len(arquivos_encontrados)} arquivos suportados. Mínimo: 1")
         
         return sorted(arquivos_encontrados)
     
@@ -468,22 +468,22 @@ class FabricaModelos:
         ModelType.LLAMA_7B: ConfiguracaoModelo(
             model_name="replicate/meta/meta-llama-3-8b-instruct",
             display_name="Llama 7B",
-            api_key=os.getenv('REPLICATE_API_TOKEN', ''),
-            temperature=0.1,
+            api_key=os.getenv('REPLICATE_API_TOKEN', 'r8_MPjPwXOOQ4ZORa5teY6esvCY6AfJr2p1frYPn'),
+            temperature=0.0,  # Temperatura baixa para reduzir alucinações
             max_tokens=4096
         ),
         ModelType.LLAMA_70B: ConfiguracaoModelo(
             model_name="replicate/meta/meta-llama-3-70b-instruct",
             display_name="Llama 70B", 
-            api_key=os.getenv('REPLICATE_API_TOKEN', ''),
-            temperature=0.2,
+            api_key=os.getenv('REPLICATE_API_TOKEN', 'r8_MPjPwXOOQ4ZORa5teY6esvCY6AfJr2p1frYPn'),
+            temperature=0.0,  # Temperatura baixa para reduzir alucinações
             max_tokens=8192
         ),
         ModelType.CHATGPT: ConfiguracaoModelo(
             model_name="replicate/openai/gpt-4o-mini",
             display_name="ChatGPT 4.0",
-            api_key=os.getenv('OPENAI_API_KEY', ''),
-            temperature=0.1,
+            api_key=os.getenv('OPENAI_API_KEY', 'r8_MPjPwXOOQ4ZORa5teY6esvCY6AfJr2p1frYPn'),
+            temperature=0.0,  # Temperatura baixa para reduzir alucinações
             max_tokens=6144
         )
     }
@@ -555,12 +555,12 @@ class ServicoResumoDocumentos:
         pasta_destino: str,
         tipo_modelo: ModelType
     ) -> Tuple[Optional[str], Optional[str]]:
-        """Processa todos os documentos de uma pasta com um modelo específico"""
+        """Processa todos os documentos usando apenas um agente para tudo"""
+        nome_modelo = FabricaModelos.obter_nome_exibicao(tipo_modelo)
+        
         try:
             # Configurar modelo
             modelo = FabricaModelos.criar_modelo(tipo_modelo)
-            nome_modelo = FabricaModelos.obter_nome_exibicao(tipo_modelo)
-            processador = ProcessadorResumosIA(modelo, nome_modelo)
             
             print(f"🔄 Processando com {nome_modelo}...")
             
@@ -568,55 +568,148 @@ class ServicoResumoDocumentos:
             arquivos = self._leitor_documentos.listar_arquivos_suportados(pasta_origem)
             print(f"📁 Encontrados {len(arquivos)} arquivos para processar")
             
-            # Processar cada documento
-            documentos_processados = []
-            
+            # Preparar conteúdo de todos os documentos
+            documentos_conteudo = []
             for i, caminho_arquivo in enumerate(arquivos, 1):
                 nome_arquivo = Path(caminho_arquivo).name
-                print(f"📄 Processando ({i}/{len(arquivos)}): {nome_arquivo}")
+                print(f"📄 Extraindo conteúdo ({i}/{len(arquivos)}): {nome_arquivo}")
                 
                 try:
-                    # Extrair conteúdo
                     conteudo = self._leitor_documentos.extrair_conteudo(caminho_arquivo)
-                    
-                    # Gerar resumo
-                    resumo = processador.gerar_resumo_documento(conteudo, nome_arquivo)
-                    
-                    # Criar documento processado
-                    doc_processado = DocumentoProcessado(
-                        nome_arquivo=nome_arquivo,
-                        caminho_completo=caminho_arquivo,
-                        conteudo_original=conteudo,
-                        resumo_gerado=resumo,
-                        timestamp=datetime.now()
-                    )
-                    
-                    documentos_processados.append(doc_processado)
-                    print(f"✅ {nome_arquivo}: Resumo gerado com sucesso")
+                    documentos_conteudo.append({
+                        'nome': nome_arquivo,
+                        'caminho': caminho_arquivo,
+                        'conteudo': conteudo
+                    })
+                    print(f"✅ {nome_arquivo}: Conteúdo extraído")
                     
                 except Exception as e:
-                    print(f"❌ Erro ao processar {nome_arquivo}: {str(e)}")
+                    print(f"❌ Erro ao extrair {nome_arquivo}: {str(e)}")
                     continue
             
-            if not documentos_processados:
-                return None, "Nenhum documento foi processado com sucesso"
+            if not documentos_conteudo:
+                return None, "Nenhum documento foi extraído com sucesso"
             
-            # Gerar relatório consolidado
-            print("📊 Gerando relatório consolidado...")
-            relatorio = processador.gerar_relatorio_consolidado(documentos_processados)
+            # Criar agente único para toda a análise
+            print("🤖 Executando análise completa com agente...")
+            agente = self._criar_agente_completo(modelo)
+            tarefa = self._criar_tarefa_completa(documentos_conteudo, pasta_origem)
+            tarefa.agent = agente  # Associar o agente à tarefa
             
-            # Salvar relatório
-            caminho_relatorio = self._gerador_relatorio.salvar_relatorio_markdown(
-                relatorio, pasta_destino
+            crew = Crew(
+                agents=[agente],
+                tasks=[tarefa],
+                process=Process.sequential,
+                verbose=False,
+                max_execution_time=900
             )
             
+            resultado = crew.kickoff()
+            
+            # Salvar relatório diretamente
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            nome_arquivo_relatorio = f"relatorio_completo_{nome_modelo.lower().replace(' ', '_')}_{timestamp}.md"
+            caminho_relatorio = Path(pasta_destino) / nome_arquivo_relatorio
+            
+            Path(pasta_destino).mkdir(parents=True, exist_ok=True)
+            
+            with open(caminho_relatorio, 'w', encoding='utf-8') as f:
+                f.write(str(resultado))
+            
             print(f"✅ {nome_modelo}: Relatório salvo em {caminho_relatorio}")
-            return caminho_relatorio, None
+            return str(caminho_relatorio), None
             
         except Exception as e:
             erro = f"Erro ao processar com {nome_modelo}: {str(e)}"
             print(f"❌ {erro}")
             return None, erro
+    
+    def _criar_agente_completo(self, modelo: LLM) -> Agent:
+        """Cria agente que faz toda a análise de uma vez"""
+        return Agent(
+            role="Analista Completo de Documentos",
+            goal="Analisar documentos e gerar relatórios completos sem inventar informações",
+            backstory="""
+            Você é um analista de documentos rigoroso e factual:
+            - Analisa EXCLUSIVAMENTE o conteúdo fornecido
+            - NUNCA inventa informações não presentes nos documentos
+            - Cria relatórios estruturados baseados apenas em fatos
+            - Mantém total fidelidade ao conteúdo original
+            - Prioriza precisão sobre criatividade
+            """,
+            verbose=False,
+            llm=modelo,
+            max_iter=3,
+            max_execution_time=900
+        )
+    
+    def _criar_tarefa_completa(self, documentos_conteudo: List[Dict], pasta_origem: str) -> Task:
+        """Cria tarefa para análise completa"""
+        
+        # Preparar conteúdo dos documentos
+        documentos_texto = ""
+        for i, doc in enumerate(documentos_conteudo, 1):
+            conteudo_limitado = doc['conteudo'][:10000] + "...[TRUNCADO]" if len(doc['conteudo']) > 10000 else doc['conteudo']
+            documentos_texto += f"""
+DOCUMENTO {i}: {doc['nome']}
+CONTEÚDO:
+{conteudo_limitado}
+
+{'='*50}
+
+"""
+        
+        return Task(
+            description=f"""
+            Analise EXCLUSIVAMENTE os documentos fornecidos e crie um relatório completo.
+
+            DOCUMENTOS:
+            {documentos_texto}
+
+            INSTRUÇÕES ANTI-ALUCINAÇÃO:
+            1. Use APENAS informações literalmente presentes nos documentos
+            2. NÃO invente números, datas ou interpretações
+            3. Se algo não estiver claro, declare que a informação não está disponível
+            4. Cite dados EXATAMENTE como aparecem
+            
+            ESTRUTURA DO RELATÓRIO (Markdown):
+
+            # Relatório Completo - Estudo de Caso 2
+
+            **Pasta analisada:** {pasta_origem}
+            **Total de documentos:** {len(documentos_conteudo)}
+            **Data:** [DATA ATUAL]
+
+            ## 📋 Documentos Analisados
+
+            [Para cada documento:]
+            ### [Número]. [Nome do Arquivo]
+            
+            **Resumo Factual:**
+            [Resumo de 150-250 palavras baseado EXCLUSIVAMENTE no conteúdo]
+
+            ---
+
+            ## 🔍 Análise Consolidada
+
+            ### Introdução
+            [Visão geral factual baseada apenas no conteúdo fornecido]
+
+            ### Características Principais
+            [Análise baseada SOMENTE nos documentos - sem especulações]
+
+            ### Conclusão
+            [Síntese factual - evite recomendações especulativas]
+
+            ---
+
+            *Relatório gerado por análise factual de documentos*
+
+            SEJA ABSOLUTAMENTE HONESTO - se não souber algo, diga que não está disponível.
+            """,
+            expected_output="Relatório completo em Markdown baseado exclusivamente nos documentos",
+            agent=None
+        )
 
 
 class GerenciadorEstudoCaso2:
@@ -628,7 +721,7 @@ class GerenciadorEstudoCaso2:
     
     def executar_estudo_completo(
         self,
-        pasta_documentos: str = "ADMINISTRATIVO_PEDAGOGICO"
+        pasta_documentos: str = "arquivo_estudo_2"
     ):
         """Executa o estudo completo com todos os modelos"""
         print("🚀 INICIANDO ESTUDO DE CASO 2 - SISTEMA DE RESUMO AUTOMÁTICO")
@@ -723,7 +816,7 @@ def main():
     
     # Exemplo de uso com pasta específica
     # Pode ser alterado para qualquer pasta com documentos
-    gerenciador.executar_estudo_completo("ADMINISTRATIVO_PEDAGOGICO")
+    gerenciador.executar_estudo_completo("arquivo_estudo_2")
 
 
 if __name__ == "__main__":
