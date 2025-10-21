@@ -31,18 +31,16 @@ class ModelType(Enum):
 
 @dataclass(frozen=True)
 class ConfiguracaoModelo:
-    """Configuração para cada modelo de IA"""
     model_name: str
     display_name: str
     api_key: str
     temperature: float = 0.1
     max_tokens: int = 4096
-    max_retries: int = 100
+    max_retries: int = 200
 
 
 @dataclass
 class DocumentoProcessado:
-    """Representa um documento após processamento"""
     nome_arquivo: str
     caminho_completo: str
     conteudo_original: str
@@ -52,7 +50,6 @@ class DocumentoProcessado:
 
 @dataclass
 class RelatorioConsolidado:
-    """Relatório final consolidado de todos os documentos"""
     introducao: str
     evolucao_padroes: str
     conclusao: str
@@ -63,48 +60,34 @@ class RelatorioConsolidado:
 
 
 class LeitorDocumentos(Protocol):
-    """Contrato para leitores de documentos"""
     
     def listar_arquivos_suportados(self, pasta: str) -> List[str]:
-        """Lista todos os arquivos suportados em uma pasta"""
         ...
     
     def extrair_conteudo(self, caminho_arquivo: str) -> str:
-        """Extrai conteúdo de um arquivo específico"""
         ...
 
 
 class ProcessadorResumos(Protocol):
-    """Contrato para processadores de resumos"""
     
     def gerar_resumo_documento(self, conteudo: str, nome_arquivo: str) -> str:
-        """Gera resumo de um documento individual"""
         ...
     
     def gerar_relatorio_consolidado(self, documentos: List[DocumentoProcessado]) -> RelatorioConsolidado:
-        """Gera relatório consolidado de múltiplos documentos"""
         ...
 
 
 class GeradorRelatorio(Protocol):
-    """Contrato para geradores de relatório"""
     
     def salvar_relatorio_markdown(self, relatorio: RelatorioConsolidado, pasta_destino: str) -> str:
-        """Salva relatório em formato Markdown"""
         ...
 
 
-# =============================================================================
-# IMPLEMENTAÇÕES CONCRETAS
-# =============================================================================
-
 class LeitorDocumentosMultiFormato:
-    """Leitor que suporta múltiplos formatos de documento"""
     
     EXTENSOES_SUPORTADAS = {'.pdf', '.docx', '.txt', '.md'}
     
     def listar_arquivos_suportados(self, pasta: str) -> List[str]:
-        """Lista todos os arquivos suportados em uma pasta"""
         if not os.path.exists(pasta):
             raise FileNotFoundError(f"Pasta '{pasta}' não encontrada")
         
@@ -118,10 +101,15 @@ class LeitorDocumentosMultiFormato:
         if len(arquivos_encontrados) < 1:
             raise ValueError(f"Encontrados apenas {len(arquivos_encontrados)} arquivos suportados. Mínimo: 1")
         
+        if len(arquivos_encontrados) > 1:
+            balancetes = [arq for arq in arquivos_encontrados if 'balancete' in Path(arq).name.lower()]
+            if balancetes:
+                print(f"📊 Priorizando {len(balancetes)} balancetes encontrados para análise comparativa")
+                return sorted(balancetes)
+        
         return sorted(arquivos_encontrados)
     
     def extrair_conteudo(self, caminho_arquivo: str) -> str:
-        """Extrai conteúdo baseado na extensão do arquivo"""
         if not os.path.exists(caminho_arquivo):
             raise FileNotFoundError(f"Arquivo '{caminho_arquivo}' não encontrado")
         
@@ -140,7 +128,6 @@ class LeitorDocumentosMultiFormato:
             raise RuntimeError(f"Erro ao extrair conteúdo de '{caminho_arquivo}': {str(e)}")
     
     def _extrair_pdf(self, caminho: str) -> str:
-        """Extrai texto de PDF usando PyMuPDF"""
         with fitz.open(caminho) as doc:
             texto = ""
             for pagina in doc:
@@ -152,7 +139,6 @@ class LeitorDocumentosMultiFormato:
         return texto.strip()
     
     def _extrair_docx(self, caminho: str) -> str:
-        """Extrai texto de DOCX usando python-docx"""
         doc = Document(caminho)
         paragrafos = [p.text for p in doc.paragraphs if p.text.strip()]
         
@@ -162,7 +148,6 @@ class LeitorDocumentosMultiFormato:
         return "\n".join(paragrafos)
     
     def _extrair_texto(self, caminho: str) -> str:
-        """Extrai texto de arquivos .txt ou .md"""
         with open(caminho, 'r', encoding='utf-8') as f:
             conteudo = f.read().strip()
         
@@ -173,14 +158,12 @@ class LeitorDocumentosMultiFormato:
 
 
 class ProcessadorResumosIA:
-    """Processador que usa IA para gerar resumos e relatórios"""
     
     def __init__(self, modelo: LLM, nome_modelo: str):
         self._modelo = modelo
         self._nome_modelo = nome_modelo
     
     def gerar_resumo_documento(self, conteudo: str, nome_arquivo: str) -> str:
-        """Gera resumo usando agente especializado"""
         agente_resumo = self._criar_agente_resumo()
         tarefa_resumo = self._criar_tarefa_resumo(conteudo, nome_arquivo)
         
@@ -210,7 +193,6 @@ class ProcessadorResumosIA:
         
         resultado = crew.kickoff()
         
-        # Processar resultado e extrair seções
         texto_resultado = str(resultado)
         secoes = self._extrair_secoes_relatorio(texto_resultado)
         
@@ -339,7 +321,6 @@ class ProcessadorResumosIA:
         """Extrai as seções do relatório usando marcadores"""
         secoes = {}
         
-        # Padrões para identificar seções
         padroes = {
             "introducao": r"\[INTRODUÇÃO\](.*?)(?=\[|$)",
             "evolucao_padroes": r"\[EVOLUÇÃO_PADRÕES\](.*?)(?=\[|$)",
@@ -351,7 +332,6 @@ class ProcessadorResumosIA:
             if match:
                 secoes[nome_secao] = match.group(1).strip()
             else:
-                # Fallback: tentar extrair seções sem marcadores
                 secoes[nome_secao] = self._extrair_secao_fallback(texto, nome_secao)
         
         return secoes
@@ -371,13 +351,11 @@ class ProcessadorResumosIA:
         for linha in linhas:
             linha_lower = linha.lower()
             
-            # Verifica se linha contém palavras-chave da seção desejada
             if any(palavra in linha_lower for palavra in palavras_chave[nome_secao]):
                 capturando = True
-                if linha.strip():  # Não adiciona a linha do título
+                if linha.strip(): 
                     continue
             
-            # Para de capturar se encontrar palavras de outra seção
             elif capturando and any(
                 palavra in linha_lower 
                 for outras_secoes in palavras_chave.values() 
@@ -426,7 +404,6 @@ class GeradorRelatorioMarkdown:
             ""
         ]
         
-        # Lista de documentos processados
         for i, doc in enumerate(relatorio.documentos_processados, 1):
             linhas.extend([
                 f"### {i}. {doc.nome_arquivo}",
@@ -440,7 +417,6 @@ class GeradorRelatorioMarkdown:
                 ""
             ])
         
-        # Relatório consolidado
         linhas.extend([
             "## 🔍 Análise Consolidada",
             "",
@@ -468,42 +444,68 @@ class FabricaModelos:
         ModelType.LLAMA_7B: ConfiguracaoModelo(
             model_name="replicate/meta/meta-llama-3-8b-instruct",
             display_name="Llama 7B",
-            api_key=os.getenv('REPLICATE_API_TOKEN', 'r8_MPjPwXOOQ4ZORa5teY6esvCY6AfJr2p1frYPn'),
-            temperature=0.0,  # Temperatura baixa para reduzir alucinações
-            max_tokens=4096
+            api_key=os.getenv('REPLICATE_API_TOKEN', 'r8_MPjPwXOOQ4ZORa5teY6esvCY6AfJr2p1frYPn')
         ),
         ModelType.LLAMA_70B: ConfiguracaoModelo(
             model_name="replicate/meta/meta-llama-3-70b-instruct",
-            display_name="Llama 70B", 
+            display_name="Llama 70B",
             api_key=os.getenv('REPLICATE_API_TOKEN', 'r8_MPjPwXOOQ4ZORa5teY6esvCY6AfJr2p1frYPn'),
-            temperature=0.0,  # Temperatura baixa para reduzir alucinações
-            max_tokens=8192
+            temperature=0.1,  
+            max_tokens=12288, 
+            max_retries=300   
         ),
         ModelType.CHATGPT: ConfiguracaoModelo(
             model_name="replicate/openai/gpt-4o-mini",
             display_name="ChatGPT 4.0",
             api_key=os.getenv('OPENAI_API_KEY', 'r8_MPjPwXOOQ4ZORa5teY6esvCY6AfJr2p1frYPn'),
-            temperature=0.0,  # Temperatura baixa para reduzir alucinações
-            max_tokens=6144
+            max_tokens=8192
         )
     }
     
     @classmethod
     def criar_modelo(cls, tipo_modelo: ModelType) -> LLM:
-        """Cria instância de modelo baseada no tipo"""
+        """Cria instância de modelo baseada no tipo com tratamento de erro robusto"""
         config = cls.CONFIGURACOES_PADRAO[tipo_modelo]
         
-        if not config.api_key:
-            raise ValueError(f"API key não configurada para {config.display_name}")
+        try:
+            return LLM(
+                model=config.model_name,
+                api_key=config.api_key,
+                drop_params=["stop", "stop_sequences", "stops", "stop_tokens"],
+                temperature=config.temperature,
+            )
+        except Exception as e:
+            print(f"⚠️  Erro ao criar modelo {config.display_name}: {str(e)}")
+            return cls._criar_modelo_alternativo(tipo_modelo, config)
+    
+    @classmethod
+    def _criar_modelo_alternativo(cls, tipo_modelo: ModelType, config: ConfiguracaoModelo) -> LLM:
+        """Cria configuração alternativa quando a principal falha"""
+        print(f"🔄 Tentando configuração alternativa para {config.display_name}...")
         
-        return LLM(
-            model=config.model_name,
-            api_key=config.api_key,
-            drop_params=["stop"],
-            temperature=config.temperature,
-            max_tokens=config.max_tokens,
-            max_retries=config.max_retries
-        )
+        if tipo_modelo == ModelType.LLAMA_7B:
+            return LLM(
+                model=config.model_name,
+                api_key=config.api_key,
+                drop_params=["stop"],
+                temperature=config.temperature,
+            )
+        elif tipo_modelo == ModelType.LLAMA_70B:
+            return LLM(
+                model="replicate/meta/meta-llama-3-70b-instruct",
+                api_key=config.api_key,
+                drop_params=["stop"],
+                temperature=0.1
+            )
+        elif tipo_modelo == ModelType.CHATGPT:
+            return LLM(
+                model="replicate/meta/meta-llama-3-70b-instruct",
+                api_key=config.api_key,
+                drop_params=["stop"],
+                temperature=0.1
+            )
+        else:
+            raise ValueError(f"Tipo de modelo não suportado: {tipo_modelo}")
     
     @classmethod
     def obter_nome_exibicao(cls, tipo_modelo: ModelType) -> str:
@@ -559,16 +561,13 @@ class ServicoResumoDocumentos:
         nome_modelo = FabricaModelos.obter_nome_exibicao(tipo_modelo)
         
         try:
-            # Configurar modelo
             modelo = FabricaModelos.criar_modelo(tipo_modelo)
             
             print(f"🔄 Processando com {nome_modelo}...")
             
-            # Listar arquivos suportados
             arquivos = self._leitor_documentos.listar_arquivos_suportados(pasta_origem)
             print(f"📁 Encontrados {len(arquivos)} arquivos para processar")
             
-            # Preparar conteúdo de todos os documentos
             documentos_conteudo = []
             for i, caminho_arquivo in enumerate(arquivos, 1):
                 nome_arquivo = Path(caminho_arquivo).name
@@ -590,124 +589,319 @@ class ServicoResumoDocumentos:
             if not documentos_conteudo:
                 return None, "Nenhum documento foi extraído com sucesso"
             
-            # Criar agente único para toda a análise
             print("🤖 Executando análise completa com agente...")
             agente = self._criar_agente_completo(modelo)
             tarefa = self._criar_tarefa_completa(documentos_conteudo, pasta_origem)
-            tarefa.agent = agente  # Associar o agente à tarefa
+            tarefa.agent = agente 
+            
+            timeout_por_modelo = {
+                "Llama 7B": 900,
+                "Llama 70B": 1200,
+                "ChatGPT 4.0": 1800
+            }
             
             crew = Crew(
                 agents=[agente],
                 tasks=[tarefa],
                 process=Process.sequential,
                 verbose=False,
-                max_execution_time=900
+                max_execution_time=timeout_por_modelo.get(nome_modelo, 600)
             )
             
-            resultado = crew.kickoff()
+            max_tentativas = 10 if nome_modelo == "ChatGPT 4.0" else (8 if nome_modelo == "Llama 70B" else 2)
+            
+            resultado = None
+            for tentativa in range(max_tentativas):
+                try:
+                    print(f"🎯 Tentativa {tentativa + 1}/{max_tentativas} para {nome_modelo}")
+                    resultado_temp = crew.kickoff()
+                    
+                    resultado_texto = str(resultado_temp).strip()
+                    if self._verificar_relatorio_completo(resultado_texto):
+                        resultado = resultado_temp
+                        print("✅ Relatório completo gerado com sucesso!")
+                        break
+                    else:
+                        print("⚠️  Relatório incompleto detectado, tentando novamente...")
+                        if tentativa == max_tentativas - 1:
+                            if nome_modelo == "Llama 70B":
+                                print("🔄 Llama 70B - Tentando forçar completude...")
+                                max_tentativas += 3
+                                print(f"🔄 Aumentando tentativas para {max_tentativas} para Llama 70B")
+                            else:
+                                print("🔄 Última tentativa - aceitar relatório parcial")
+                                resultado = resultado_temp
+                                break
+                        raise RuntimeError("Relatório incompleto - forçando retry")
+                            
+                except Exception as e_exec:
+                    print(f"⚠️  Tentativa {tentativa + 1} falhou: {str(e_exec)}")
+                    
+                    if (nome_modelo == "ChatGPT 4.0" or nome_modelo == "Llama 70B") and tentativa < max_tentativas - 1:
+                        print("🔄 Tentando novamente com configurações diferentes...")
+                        import time
+                        sleep_time = 10 if nome_modelo == "Llama 70B" else 5
+                        time.sleep(sleep_time)
+                        
+                        if nome_modelo == "Llama 70B":
+                            if tentativa % 4 == 0:
+                                modelo = self._criar_modelo_conservador(tipo_modelo)
+                            elif tentativa % 4 == 1:
+                                modelo = self._criar_modelo_ultra_conservador(tipo_modelo)
+                            elif tentativa % 4 == 2:
+                                modelo = FabricaModelos._criar_modelo_alternativo(tipo_modelo, FabricaModelos.CONFIGURACOES_PADRAO[tipo_modelo])
+                            else:
+                                modelo = FabricaModelos.criar_modelo(tipo_modelo)
+                        else:
+                            if tentativa % 3 == 0:
+                                modelo = self._criar_modelo_conservador(tipo_modelo)
+                            elif tentativa % 3 == 1:
+                                modelo = FabricaModelos._criar_modelo_alternativo(tipo_modelo, FabricaModelos.CONFIGURACOES_PADRAO[tipo_modelo])
+                            else:
+                                modelo = FabricaModelos.criar_modelo(tipo_modelo)
+                        
+                        agente = self._criar_agente_completo(modelo)
+                        tarefa.agent = agente
+                        timeout_base = 300 if nome_modelo != "Llama 70B" else 600  # Llama 70B precisa de mais tempo
+                        timeout_incremental = tentativa * 120 if nome_modelo == "Llama 70B" else tentativa * 60
+                        
+                        crew = Crew(
+                            agents=[agente],
+                            tasks=[tarefa],
+                            process=Process.sequential,
+                            verbose=False,
+                            max_execution_time=timeout_base + timeout_incremental
+                        )
+                    elif tentativa < max_tentativas - 1:
+                        print("🔄 Tentando novamente com configurações reduzidas...")
+                        modelo = self._criar_modelo_conservador(tipo_modelo)
+                        agente = self._criar_agente_completo(modelo)
+                        tarefa.agent = agente
+                        crew = Crew(
+                            agents=[agente],
+                            tasks=[tarefa],
+                            process=Process.sequential,
+                            verbose=False,
+                            max_execution_time=300
+                        )
+                    else:
+                        raise e_exec
+            
+            if resultado is None:
+                if nome_modelo == "Llama 70B":
+                    print("🔄 Fallback: Tentando Llama 7B como substituto para Llama 70B...")
+                    try:
+                        modelo_fallback = FabricaModelos.criar_modelo(ModelType.LLAMA_7B)
+                        agente_fallback = self._criar_agente_completo(modelo_fallback)
+                        tarefa.agent = agente_fallback
+                        
+                        crew_fallback = Crew(
+                            agents=[agente_fallback],
+                            tasks=[tarefa],
+                            process=Process.sequential,
+                            verbose=False,
+                            max_execution_time=900
+                        )
+                        
+                        resultado = crew_fallback.kickoff()
+                        print("✅ Fallback bem-sucedido usando Llama 7B")
+                    except Exception as e_fallback:
+                        print(f"❌ Fallback também falhou: {str(e_fallback)}")
+                        raise RuntimeError(f"Todas as tentativas falharam para {nome_modelo}, incluindo fallback")
+                else:
+                    raise RuntimeError(f"Todas as {max_tentativas} tentativas falharam para {nome_modelo}")
             
             # Salvar relatório diretamente
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            nome_arquivo_relatorio = f"relatorio_completo_{nome_modelo.lower().replace(' ', '_')}_{timestamp}.md"
+            nome_arquivo_relatorio = f"analise_financeira_{nome_modelo.lower().replace(' ', '_')}_{timestamp}.md"
             caminho_relatorio = Path(pasta_destino) / nome_arquivo_relatorio
             
+            # Garantir que pasta existe
             Path(pasta_destino).mkdir(parents=True, exist_ok=True)
             
-            with open(caminho_relatorio, 'w', encoding='utf-8') as f:
-                f.write(str(resultado))
+            # Verificar se resultado não está vazio
+            resultado_texto = str(resultado).strip()
+            if not resultado_texto:
+                return None, "Resultado da análise está vazio"
             
-            print(f"✅ {nome_modelo}: Relatório salvo em {caminho_relatorio}")
-            return str(caminho_relatorio), None
+            # Salvar com tratamento de erro robusto
+            try:
+                with open(caminho_relatorio, 'w', encoding='utf-8') as f:
+                    f.write(resultado_texto)
+                
+                # Verificar se arquivo foi realmente criado
+                if not caminho_relatorio.exists() or caminho_relatorio.stat().st_size == 0:
+                    return None, "Falha ao criar arquivo de relatório"
+                
+                print(f"✅ {nome_modelo}: Relatório salvo em {caminho_relatorio}")
+                print(f"📊 Tamanho do relatório: {caminho_relatorio.stat().st_size} bytes")
+                return str(caminho_relatorio), None
+                
+            except Exception as e_save:
+                return None, f"Erro ao salvar relatório: {str(e_save)}"
             
         except Exception as e:
             erro = f"Erro ao processar com {nome_modelo}: {str(e)}"
             print(f"❌ {erro}")
             return None, erro
     
+    def _criar_modelo_conservador(self, tipo_modelo: ModelType) -> LLM:
+        """Cria modelo com configurações muito conservadoras para retry"""
+        config = FabricaModelos.CONFIGURACOES_PADRAO[tipo_modelo]
+        
+        print(f"🔧 Criando modelo conservador para {config.display_name}")
+        
+        # Configurações específicas por modelo para relatórios completos
+        if tipo_modelo == ModelType.CHATGPT:
+            return LLM(
+                model=config.model_name,
+                api_key=config.api_key,
+                drop_params=["stop", "stop_sequences", "stops", "stop_tokens"],
+                temperature=0.1,
+                max_tokens=12288  # Tokens extras para ChatGPT
+            )
+        else:
+            return LLM(
+                model=config.model_name,
+                api_key=config.api_key,
+                drop_params=["stop", "stop_sequences", "stops", "stop_tokens"],
+                temperature=0.1,
+                max_tokens=8192  # Tokens extras para outros modelos
+            )
+    
+    def _verificar_relatorio_completo(self, resultado_texto: str) -> bool:
+        """Verifica se o relatório contém todas as seções obrigatórias"""
+        secoes_obrigatorias = [
+            "Resumo Executivo",
+            "Documentos Analisados",
+            "1. Maiores Gastos por Período",
+            "2. Padrões de Repetição",
+            "3. Evolução",
+            "4. Oportunidades de Otimização", 
+            "5. Performance",
+            "Recomendações"
+        ]
+        
+        secoes_encontradas = 0
+        for secao in secoes_obrigatorias:
+            if secao.lower() in resultado_texto.lower():
+                secoes_encontradas += 1
+        
+        completude = (secoes_encontradas / len(secoes_obrigatorias)) * 100
+        print(f"📊 Completude do relatório: {completude:.1f}% ({secoes_encontradas}/{len(secoes_obrigatorias)} seções)")
+        
+        # Considerar completo se tiver pelo menos 75% das seções (50% para Llama 70B)
+        threshold = 50.0 if "70B" in resultado_texto else 75.0
+        return completude >= threshold
+    
+    def _criar_modelo_ultra_conservador(self, tipo_modelo: ModelType) -> LLM:
+        """Cria modelo com configurações extremamente conservadoras para Llama 70B"""
+        config = FabricaModelos.CONFIGURACOES_PADRAO[tipo_modelo]
+        
+        print(f"🔧 Criando modelo ULTRA conservador para {config.display_name}")
+        
+        return LLM(
+            model=config.model_name,
+            api_key=config.api_key,
+            drop_params=["stop", "stop_sequences", "stops", "stop_tokens", "top_p", "top_k"],
+            temperature=0.05,  # Temperatura ainda menor
+            max_tokens=4096,   # Tokens reduzidos para evitar timeout
+            max_retries=300    # Mais retries internos
+        )
+    
     def _criar_agente_completo(self, modelo: LLM) -> Agent:
-        """Cria agente que faz toda a análise de uma vez"""
+        """Cria agente especializado em análise financeira comparativa"""
         return Agent(
-            role="Analista Completo de Documentos",
-            goal="Analisar documentos e gerar relatórios completos sem inventar informações",
+            role="Analista Financeiro Especializado",
+            goal="Analisar balancetes financeiros identificando padrões, tendências e oportunidades de otimização de custos",
             backstory="""
-            Você é um analista de documentos rigoroso e factual:
-            - Analisa EXCLUSIVAMENTE o conteúdo fornecido
-            - NUNCA inventa informações não presentes nos documentos
-            - Cria relatórios estruturados baseados apenas em fatos
-            - Mantém total fidelidade ao conteúdo original
-            - Prioriza precisão sobre criatividade
+            Você é um analista financeiro experiente especializado em:
+            - Análise comparativa de balancetes e demonstrativos financeiros
+            - Identificação de padrões de gastos e receitas ao longo do tempo
+            - Detecção de anomalias e oportunidades de redução de custos
+            - Análise de eficiência operacional e financeira
+            - Geração de recomendações práticas baseadas em dados reais
+            - Trabalha EXCLUSIVAMENTE com dados presentes nos documentos
+            - NUNCA inventa números ou informações não documentadas
             """,
             verbose=False,
             llm=modelo,
-            max_iter=3,
-            max_execution_time=900
         )
     
     def _criar_tarefa_completa(self, documentos_conteudo: List[Dict], pasta_origem: str) -> Task:
-        """Cria tarefa para análise completa"""
+        """Cria tarefa para análise financeira específica e comparativa"""
         
-        # Preparar conteúdo dos documentos
-        documentos_texto = ""
+        # Preparar conteúdo de TODOS os documentos para análise comparativa
+        documentos_texto = f"ANÁLISE COMPARATIVA DE {len(documentos_conteudo)} BALANCETES:\n\n"
+        
         for i, doc in enumerate(documentos_conteudo, 1):
-            conteudo_limitado = doc['conteudo'][:10000] + "...[TRUNCADO]" if len(doc['conteudo']) > 10000 else doc['conteudo']
+            # Para análise comparativa, incluir mais conteúdo de cada documento
+            conteudo_limitado = doc['conteudo'][:8000] + "...[TRUNCADO]" if len(doc['conteudo']) > 8000 else doc['conteudo']
             documentos_texto += f"""
 DOCUMENTO {i}: {doc['nome']}
-CONTEÚDO:
+PERÍODO: {doc['nome'].replace('Balancete_', '').replace('.pdf', '').replace('_', '/')}
+CONTEÚDO FINANCEIRO:
 {conteudo_limitado}
 
-{'='*50}
+{'='*60}
 
 """
         
+        # Adicionar resumo dos documentos para facilitar comparação
+        documentos_texto += f"\nRESUMO: Total de {len(documentos_conteudo)} balancetes para análise comparativa temporal.\n"
+        
         return Task(
             description=f"""
-            Analise EXCLUSIVAMENTE os documentos fornecidos e crie um relatório completo.
+            Analise TODOS os {len(documentos_conteudo)} balancetes e faça análise comparativa completa.
 
             DOCUMENTOS:
             {documentos_texto}
 
-            INSTRUÇÕES ANTI-ALUCINAÇÃO:
-            1. Use APENAS informações literalmente presentes nos documentos
-            2. NÃO invente números, datas ou interpretações
-            3. Se algo não estiver claro, declare que a informação não está disponível
-            4. Cite dados EXATAMENTE como aparecem
-            
-            ESTRUTURA DO RELATÓRIO (Markdown):
+            ANÁLISE OBRIGATÓRIA - 5 SEÇÕES:
 
-            # Relatório Completo - Estudo de Caso 2
+            1. **MAIORES GASTOS**: Liste top 5 gastos de cada período e compare evolução.
 
-            **Pasta analisada:** {pasta_origem}
-            **Total de documentos:** {len(documentos_conteudo)}
-            **Data:** [DATA ATUAL]
+            2. **PADRÕES**: Identifique gastos recorrentes e suas tendências (crescimento/redução).
 
-            ## 📋 Documentos Analisados
+            3. **EVOLUÇÃO TEMPORAL**: Tabela receitas/despesas/resultado + melhor/pior período.
 
-            [Para cada documento:]
-            ### [Número]. [Nome do Arquivo]
-            
-            **Resumo Factual:**
-            [Resumo de 150-250 palavras baseado EXCLUSIVAMENTE no conteúdo]
+            4. **OTIMIZAÇÃO**: Gastos com maior potencial de redução + recomendações específicas.
 
-            ---
+            5. **PERFORMANCE**: Margem de cada período + correlações + eficiência operacional.
 
-            ## 🔍 Análise Consolidada
+            FORMATO OBRIGATÓRIO:
 
-            ### Introdução
-            [Visão geral factual baseada apenas no conteúdo fornecido]
+            # Análise Financeira Comparativa - Estudo de Caso 2
 
-            ### Características Principais
-            [Análise baseada SOMENTE nos documentos - sem especulações]
+            ## 📊 Resumo Executivo
+            [Principais tendências dos {len(documentos_conteudo)} balancetes]
 
-            ### Conclusão
-            [Síntese factual - evite recomendações especulativas]
+            ## 📋 Documentos Analisados (TABELA OBRIGATÓRIA)
+            | Período | Receitas | Despesas | Resultado | Margem % |
+            |---------|----------|----------|-----------|----------|
+            [Todos os {len(documentos_conteudo)} períodos]
 
-            ---
+            ## 💰 Análise por Seção
 
-            *Relatório gerado por análise factual de documentos*
+            ### 1. Maiores Gastos por Período
+            [Top 5 gastos de cada período]
 
-            SEJA ABSOLUTAMENTE HONESTO - se não souber algo, diga que não está disponível.
+            ### 2. Padrões de Repetição  
+            [Gastos recorrentes e tendências]
+
+            ### 3. Evolução Temporal
+            [Melhor/pior período e variações]
+
+            ### 4. Oportunidades de Otimização
+            [Recomendações específicas]
+
+            ### 5. Performance Comparativa
+            [Análise de margens e eficiência]
+
+            ## 🎯 Recomendações Práticas
+            [3-5 ações específicas]
             """,
-            expected_output="Relatório completo em Markdown baseado exclusivamente nos documentos",
+            expected_output="Análise financeira detalhada respondendo às perguntas específicas com recomendações práticas",
             agent=None
         )
 
@@ -721,12 +915,14 @@ class GerenciadorEstudoCaso2:
     
     def executar_estudo_completo(
         self,
-        pasta_documentos: str = "arquivo_estudo_2"
+        pasta_documentos: str = "arquivo_estudo_2",
+        apenas_llama_7b: bool = False
     ):
         """Executa o estudo completo com todos os modelos"""
-        print("🚀 INICIANDO ESTUDO DE CASO 2 - SISTEMA DE RESUMO AUTOMÁTICO")
-        print("📋 Processamento em lote de múltiplos documentos")
-        print("📁 Gerando relatórios consolidados com análise de padrões")
+        print("🚀 INICIANDO ESTUDO DE CASO 2 - ANÁLISE FINANCEIRA INTELIGENTE")
+        print("� Análise comparativa de balancetes e documentos financeiros")
+        print("� Identificação de padrões, gastos recorrentes e oportunidades")
+        print("🎯 Geração de recomendações específicas para otimização de custos")
         print()
         
         self._garantir_pasta_resultados()
@@ -739,8 +935,14 @@ class GerenciadorEstudoCaso2:
         
         resultados = {}
         
-        # Processar com cada modelo
-        for tipo_modelo in ModelType:
+        # Processar com cada modelo (priorizando Llama 7B que está estável)
+        if apenas_llama_7b:
+            modelos_para_testar = [ModelType.LLAMA_7B]
+            print("🎯 Executando apenas com Llama 7B (modo otimizado)")
+        else:
+            modelos_para_testar = [ModelType.LLAMA_7B, ModelType.LLAMA_70B, ModelType.CHATGPT]
+        
+        for tipo_modelo in modelos_para_testar:
             nome_modelo = FabricaModelos.obter_nome_exibicao(tipo_modelo)
             print(f"\n{'='*60}")
             print(f"🤖 PROCESSANDO COM: {nome_modelo}")
@@ -772,7 +974,7 @@ class GerenciadorEstudoCaso2:
     
     def _exibir_resumo_final(self, resultados: Dict, pasta_analisada: str):
         """Exibe resumo final dos resultados"""
-        print(f"\n🎉 ESTUDO DE CASO 2 CONCLUÍDO!")
+        print("\n🎉 ESTUDO DE CASO 2 CONCLUÍDO!")
         print(f"📁 Pasta analisada: {pasta_analisada}")
         print(f"📊 Resultados salvos em: {self._pasta_resultados}/")
         print()
@@ -789,7 +991,10 @@ class GerenciadorEstudoCaso2:
         print(f"📈 Taxa de sucesso: {sucessos}/{len(ModelType)} modelos ({(sucessos/len(ModelType)*100):.1f}%)")
         
         if sucessos > 1:
-            print("💡 Compare os relatórios gerados para analisar as diferenças entre os modelos!")
+            print("💡 Compare os relatórios para analisar:")
+            print("   • Diferenças entre modelos de IA")
+            print("   • Padrões identificados nos balancetes")
+            print("   • Recomendações de otimização financeira")
 
 
 # =============================================================================
@@ -816,7 +1021,7 @@ def main():
     
     # Exemplo de uso com pasta específica
     # Pode ser alterado para qualquer pasta com documentos
-    gerenciador.executar_estudo_completo("arquivo_estudo_2")
+    gerenciador.executar_estudo_completo("arquivo_estudo_2", apenas_llama_7b=False)
 
 
 if __name__ == "__main__":
