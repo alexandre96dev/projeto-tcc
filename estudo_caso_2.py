@@ -1,7 +1,7 @@
 """
-Estudo de Caso 2 - Sistema de Resumo Automático de Documentos
-Sistema simplificado para processamento em lote de múltiplos documentos
-Baseado na conversa com orientador - foco em simplicidade e resultados práticos
+Estudo de Caso 2 - Sistema de Análise Financeira Comparativa
+Sistema limpo para processamento de balancetes com 3 modelos de IA independentes
+Cada modelo executa uma única vez sem fallbacks ou modificações
 """
 
 from abc import ABC, abstractmethod
@@ -36,7 +36,7 @@ class ConfiguracaoModelo:
     api_key: str
     temperature: float = 0.1
     max_tokens: int = 4096
-    max_retries: int = 200
+    max_retries: int = 500
 
 
 @dataclass
@@ -438,74 +438,48 @@ class GeradorRelatorioMarkdown:
 
 
 class FabricaModelos:
-    """Factory para criação de modelos de IA - Reutilizada do Estudo de Caso 1"""
+    """Factory para criação de modelos de IA com configurações equalizadas"""
     
     CONFIGURACOES_PADRAO = {
         ModelType.LLAMA_7B: ConfiguracaoModelo(
             model_name="replicate/meta/meta-llama-3-8b-instruct",
             display_name="Llama 7B",
-            api_key=os.getenv('REPLICATE_API_TOKEN', 'r8_MPjPwXOOQ4ZORa5teY6esvCY6AfJr2p1frYPn')
+            api_key=os.getenv('REPLICATE_API_TOKEN', 'r8_MPjPwXOOQ4ZORa5teY6esvCY6AfJr2p1frYPn'),
+            temperature=0.1,
+            max_tokens=16384,
+            max_retries=300
         ),
         ModelType.LLAMA_70B: ConfiguracaoModelo(
             model_name="replicate/meta/meta-llama-3-70b-instruct",
             display_name="Llama 70B",
             api_key=os.getenv('REPLICATE_API_TOKEN', 'r8_MPjPwXOOQ4ZORa5teY6esvCY6AfJr2p1frYPn'),
             temperature=0.1,  
-            max_tokens=12288, 
+            max_tokens=16384, 
             max_retries=300   
         ),
         ModelType.CHATGPT: ConfiguracaoModelo(
             model_name="replicate/openai/gpt-4o-mini",
             display_name="ChatGPT 4.0",
             api_key=os.getenv('OPENAI_API_KEY', 'r8_MPjPwXOOQ4ZORa5teY6esvCY6AfJr2p1frYPn'),
-            max_tokens=8192
+            temperature=0.1,
+            max_tokens=16384,
+            max_retries=300
         )
     }
     
     @classmethod
     def criar_modelo(cls, tipo_modelo: ModelType) -> LLM:
-        """Cria instância de modelo baseada no tipo com tratamento de erro robusto"""
+        """Cria instância de modelo baseada no tipo com configurações equalizadas"""
         config = cls.CONFIGURACOES_PADRAO[tipo_modelo]
         
-        try:
-            return LLM(
-                model=config.model_name,
-                api_key=config.api_key,
-                drop_params=["stop", "stop_sequences", "stops", "stop_tokens"],
-                temperature=config.temperature,
-            )
-        except Exception as e:
-            print(f"⚠️  Erro ao criar modelo {config.display_name}: {str(e)}")
-            return cls._criar_modelo_alternativo(tipo_modelo, config)
-    
-    @classmethod
-    def _criar_modelo_alternativo(cls, tipo_modelo: ModelType, config: ConfiguracaoModelo) -> LLM:
-        """Cria configuração alternativa quando a principal falha"""
-        print(f"🔄 Tentando configuração alternativa para {config.display_name}...")
-        
-        if tipo_modelo == ModelType.LLAMA_7B:
-            return LLM(
-                model=config.model_name,
-                api_key=config.api_key,
-                drop_params=["stop"],
-                temperature=config.temperature,
-            )
-        elif tipo_modelo == ModelType.LLAMA_70B:
-            return LLM(
-                model="replicate/meta/meta-llama-3-70b-instruct",
-                api_key=config.api_key,
-                drop_params=["stop"],
-                temperature=0.1
-            )
-        elif tipo_modelo == ModelType.CHATGPT:
-            return LLM(
-                model="replicate/meta/meta-llama-3-70b-instruct",
-                api_key=config.api_key,
-                drop_params=["stop"],
-                temperature=0.1
-            )
-        else:
-            raise ValueError(f"Tipo de modelo não suportado: {tipo_modelo}")
+        return LLM(
+            model=config.model_name,
+            api_key=config.api_key,
+            drop_params=["stop", "stop_sequences", "stops", "stop_tokens"],
+            temperature=config.temperature,
+            max_tokens=config.max_tokens,
+            request_timeout=120,
+        )
     
     @classmethod
     def obter_nome_exibicao(cls, tipo_modelo: ModelType) -> str:
@@ -591,125 +565,22 @@ class ServicoResumoDocumentos:
             
             print("🤖 Executando análise completa com agente...")
             agente = self._criar_agente_completo(modelo)
-            tarefa = self._criar_tarefa_completa(documentos_conteudo, pasta_origem)
+            tarefa = self._criar_tarefa_completa(documentos_conteudo)
             tarefa.agent = agente 
             
-            timeout_por_modelo = {
-                "Llama 7B": 900,
-                "Llama 70B": 1200,
-                "ChatGPT 4.0": 1800
-            }
+            # Timeout equalizado para todos os modelos
+            timeout_padrao = 1800  # 30 minutos para todos
             
             crew = Crew(
                 agents=[agente],
                 tasks=[tarefa],
                 process=Process.sequential,
                 verbose=False,
-                max_execution_time=timeout_por_modelo.get(nome_modelo, 600)
+                max_execution_time=timeout_padrao
             )
             
-            max_tentativas = 10 if nome_modelo == "ChatGPT 4.0" else (8 if nome_modelo == "Llama 70B" else 2)
-            
-            resultado = None
-            for tentativa in range(max_tentativas):
-                try:
-                    print(f"🎯 Tentativa {tentativa + 1}/{max_tentativas} para {nome_modelo}")
-                    resultado_temp = crew.kickoff()
-                    
-                    resultado_texto = str(resultado_temp).strip()
-                    if self._verificar_relatorio_completo(resultado_texto):
-                        resultado = resultado_temp
-                        print("✅ Relatório completo gerado com sucesso!")
-                        break
-                    else:
-                        print("⚠️  Relatório incompleto detectado, tentando novamente...")
-                        if tentativa == max_tentativas - 1:
-                            if nome_modelo == "Llama 70B":
-                                print("🔄 Llama 70B - Tentando forçar completude...")
-                                max_tentativas += 3
-                                print(f"🔄 Aumentando tentativas para {max_tentativas} para Llama 70B")
-                            else:
-                                print("🔄 Última tentativa - aceitar relatório parcial")
-                                resultado = resultado_temp
-                                break
-                        raise RuntimeError("Relatório incompleto - forçando retry")
-                            
-                except Exception as e_exec:
-                    print(f"⚠️  Tentativa {tentativa + 1} falhou: {str(e_exec)}")
-                    
-                    if (nome_modelo == "ChatGPT 4.0" or nome_modelo == "Llama 70B") and tentativa < max_tentativas - 1:
-                        print("🔄 Tentando novamente com configurações diferentes...")
-                        import time
-                        sleep_time = 10 if nome_modelo == "Llama 70B" else 5
-                        time.sleep(sleep_time)
-                        
-                        if nome_modelo == "Llama 70B":
-                            if tentativa % 4 == 0:
-                                modelo = self._criar_modelo_conservador(tipo_modelo)
-                            elif tentativa % 4 == 1:
-                                modelo = self._criar_modelo_ultra_conservador(tipo_modelo)
-                            elif tentativa % 4 == 2:
-                                modelo = FabricaModelos._criar_modelo_alternativo(tipo_modelo, FabricaModelos.CONFIGURACOES_PADRAO[tipo_modelo])
-                            else:
-                                modelo = FabricaModelos.criar_modelo(tipo_modelo)
-                        else:
-                            if tentativa % 3 == 0:
-                                modelo = self._criar_modelo_conservador(tipo_modelo)
-                            elif tentativa % 3 == 1:
-                                modelo = FabricaModelos._criar_modelo_alternativo(tipo_modelo, FabricaModelos.CONFIGURACOES_PADRAO[tipo_modelo])
-                            else:
-                                modelo = FabricaModelos.criar_modelo(tipo_modelo)
-                        
-                        agente = self._criar_agente_completo(modelo)
-                        tarefa.agent = agente
-                        timeout_base = 300 if nome_modelo != "Llama 70B" else 600  # Llama 70B precisa de mais tempo
-                        timeout_incremental = tentativa * 120 if nome_modelo == "Llama 70B" else tentativa * 60
-                        
-                        crew = Crew(
-                            agents=[agente],
-                            tasks=[tarefa],
-                            process=Process.sequential,
-                            verbose=False,
-                            max_execution_time=timeout_base + timeout_incremental
-                        )
-                    elif tentativa < max_tentativas - 1:
-                        print("🔄 Tentando novamente com configurações reduzidas...")
-                        modelo = self._criar_modelo_conservador(tipo_modelo)
-                        agente = self._criar_agente_completo(modelo)
-                        tarefa.agent = agente
-                        crew = Crew(
-                            agents=[agente],
-                            tasks=[tarefa],
-                            process=Process.sequential,
-                            verbose=False,
-                            max_execution_time=300
-                        )
-                    else:
-                        raise e_exec
-            
-            if resultado is None:
-                if nome_modelo == "Llama 70B":
-                    print("🔄 Fallback: Tentando Llama 7B como substituto para Llama 70B...")
-                    try:
-                        modelo_fallback = FabricaModelos.criar_modelo(ModelType.LLAMA_7B)
-                        agente_fallback = self._criar_agente_completo(modelo_fallback)
-                        tarefa.agent = agente_fallback
-                        
-                        crew_fallback = Crew(
-                            agents=[agente_fallback],
-                            tasks=[tarefa],
-                            process=Process.sequential,
-                            verbose=False,
-                            max_execution_time=900
-                        )
-                        
-                        resultado = crew_fallback.kickoff()
-                        print("✅ Fallback bem-sucedido usando Llama 7B")
-                    except Exception as e_fallback:
-                        print(f"❌ Fallback também falhou: {str(e_fallback)}")
-                        raise RuntimeError(f"Todas as tentativas falharam para {nome_modelo}, incluindo fallback")
-                else:
-                    raise RuntimeError(f"Todas as {max_tentativas} tentativas falharam para {nome_modelo}")
+            print("🤖 Executando análise financeira...")
+            resultado = crew.kickoff()
             
             # Salvar relatório diretamente
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -745,69 +616,11 @@ class ServicoResumoDocumentos:
             print(f"❌ {erro}")
             return None, erro
     
-    def _criar_modelo_conservador(self, tipo_modelo: ModelType) -> LLM:
-        """Cria modelo com configurações muito conservadoras para retry"""
-        config = FabricaModelos.CONFIGURACOES_PADRAO[tipo_modelo]
-        
-        print(f"🔧 Criando modelo conservador para {config.display_name}")
-        
-        # Configurações específicas por modelo para relatórios completos
-        if tipo_modelo == ModelType.CHATGPT:
-            return LLM(
-                model=config.model_name,
-                api_key=config.api_key,
-                drop_params=["stop", "stop_sequences", "stops", "stop_tokens"],
-                temperature=0.1,
-                max_tokens=12288  # Tokens extras para ChatGPT
-            )
-        else:
-            return LLM(
-                model=config.model_name,
-                api_key=config.api_key,
-                drop_params=["stop", "stop_sequences", "stops", "stop_tokens"],
-                temperature=0.1,
-                max_tokens=8192  # Tokens extras para outros modelos
-            )
+
     
-    def _verificar_relatorio_completo(self, resultado_texto: str) -> bool:
-        """Verifica se o relatório contém todas as seções obrigatórias"""
-        secoes_obrigatorias = [
-            "Resumo Executivo",
-            "Documentos Analisados",
-            "1. Maiores Gastos por Período",
-            "2. Padrões de Repetição",
-            "3. Evolução",
-            "4. Oportunidades de Otimização", 
-            "5. Performance",
-            "Recomendações"
-        ]
-        
-        secoes_encontradas = 0
-        for secao in secoes_obrigatorias:
-            if secao.lower() in resultado_texto.lower():
-                secoes_encontradas += 1
-        
-        completude = (secoes_encontradas / len(secoes_obrigatorias)) * 100
-        print(f"📊 Completude do relatório: {completude:.1f}% ({secoes_encontradas}/{len(secoes_obrigatorias)} seções)")
-        
-        # Considerar completo se tiver pelo menos 75% das seções (50% para Llama 70B)
-        threshold = 50.0 if "70B" in resultado_texto else 75.0
-        return completude >= threshold
+
     
-    def _criar_modelo_ultra_conservador(self, tipo_modelo: ModelType) -> LLM:
-        """Cria modelo com configurações extremamente conservadoras para Llama 70B"""
-        config = FabricaModelos.CONFIGURACOES_PADRAO[tipo_modelo]
-        
-        print(f"🔧 Criando modelo ULTRA conservador para {config.display_name}")
-        
-        return LLM(
-            model=config.model_name,
-            api_key=config.api_key,
-            drop_params=["stop", "stop_sequences", "stops", "stop_tokens", "top_p", "top_k"],
-            temperature=0.05,  # Temperatura ainda menor
-            max_tokens=4096,   # Tokens reduzidos para evitar timeout
-            max_retries=300    # Mais retries internos
-        )
+
     
     def _criar_agente_completo(self, modelo: LLM) -> Agent:
         """Cria agente especializado em análise financeira comparativa"""
@@ -828,7 +641,7 @@ class ServicoResumoDocumentos:
             llm=modelo,
         )
     
-    def _criar_tarefa_completa(self, documentos_conteudo: List[Dict], pasta_origem: str) -> Task:
+    def _criar_tarefa_completa(self, documentos_conteudo: List[Dict]) -> Task:
         """Cria tarefa para análise financeira específica e comparativa"""
         
         # Preparar conteúdo de TODOS os documentos para análise comparativa
@@ -948,11 +761,31 @@ class GerenciadorEstudoCaso2:
             print(f"🤖 PROCESSANDO COM: {nome_modelo}")
             print(f"{'='*60}")
             
-            caminho_relatorio, erro = self._servico_resumo.processar_pasta_documentos(
-                pasta_origem=pasta_documentos,
-                pasta_destino=str(self._pasta_resultados),
-                tipo_modelo=tipo_modelo
-            )
+            # Mecanismo de retry - máximo 3 tentativas com as mesmas configurações
+            max_tentativas = 10
+            caminho_relatorio = None
+            ultimo_erro = None
+            
+            for tentativa in range(1, max_tentativas + 1):
+                if tentativa > 1:
+                    print(f"🔄 Tentativa {tentativa}/{max_tentativas} para {nome_modelo}...")
+                
+                caminho_relatorio, erro = self._servico_resumo.processar_pasta_documentos(
+                    pasta_origem=pasta_documentos,
+                    pasta_destino=str(self._pasta_resultados),
+                    tipo_modelo=tipo_modelo
+                )
+                
+                if caminho_relatorio:
+                    # Sucesso! Sair do loop de retry
+                    break
+                else:
+                    ultimo_erro = erro
+                    if tentativa < max_tentativas:
+                        print(f"⚠️ Tentativa {tentativa} falhou: {erro}")
+                        print(f"🔄 Tentando novamente em 5 segundos...")
+                        import time
+                        time.sleep(5)
             
             if caminho_relatorio:
                 resultados[tipo_modelo] = {
@@ -961,7 +794,7 @@ class GerenciadorEstudoCaso2:
                 }
             else:
                 resultados[tipo_modelo] = {
-                    "status": f"❌ Falhou: {erro}",
+                    "status": f"❌ Falhou após {max_tentativas} tentativas: {ultimo_erro}",
                     "arquivo": None
                 }
         
