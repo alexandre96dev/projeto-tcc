@@ -582,7 +582,7 @@ class GerenciadorEstudoCaso2:
                         break
 
                 if tentativa < max_tentativas:
-                    espera = 2 * tentativa + random.uniform(0, 2)  # backoff com jitter
+                    espera = 7 * tentativa + random.uniform(0, 2)  # backoff com jitter
                     print(f"⏳ Aguardando {espera:.1f}s antes da próxima tentativa...")
                     time.sleep(espera)
 
