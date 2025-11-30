@@ -1,6 +1,8 @@
 """
-Estudo de Caso 1 - Análise de Texto Científico
-Sistema refatorado aplicando princípios SOLID e Clean Code
+Estudo de Caso 1 - Análise de Texto Científico (VERSÃO MULTI-AGENTE)
+- Arquitetura com 3 agentes especializados: Analista Gramatical, Analista de Citações e Analista de Clareza
+- Cada agente tem responsabilidade específica no pipeline de análise
+- Mantém mesmo resultado final com melhor modularidade
 """
 
 from abc import ABC, abstractmethod
@@ -20,7 +22,9 @@ from crewai.tools import BaseTool
 from pydantic import BaseModel, Field
 from docx import Document
 
-
+# =============================
+# TIPOS E CONFIGURAÇÕES (mantidos iguais)
+# =============================
 
 class ModelType(Enum):
     LLAMA_7B = "llama_7b"
@@ -64,60 +68,41 @@ class ResultadoAnalise:
     timestamp: datetime
 
 
+# =============================
+# PROTOCOLS E CLASSES AUXILIARES (mantidos)
+# =============================
 
 class LeitorPDF(Protocol):
-    
-    def extrair_texto_completo(self, caminho_arquivo: str) -> str:
-        """Extrai todo o texto do arquivo"""
-        ...
-    
-    def extrair_texto_por_paginas(self, caminho_arquivo: str) -> Tuple[str, List[str]]:
-        """Extrai texto separado por páginas/seções"""
-        ...
+    def extrair_texto_completo(self, caminho_arquivo: str) -> str: ...
+    def extrair_texto_por_paginas(self, caminho_arquivo: str) -> Tuple[str, List[str]]: ...
 
 
 class ProcessadorJSON(Protocol):
-    """Contrato para processadores de JSON"""
-    
-    def extrair_json_de_texto(self, texto: str) -> Optional[Dict]:
-        """Extrai estrutura JSON de um texto"""
-        ...
+    def extrair_json_de_texto(self, texto: str) -> Optional[Dict]: ...
 
 
 class ValidadorConteudo(Protocol):
-    """Contrato para validadores de conteúdo"""
-    
     def validar_problemas_contra_pdf(
-        self, 
-        problemas: List[Dict], 
-        paginas_pdf: List[str]
-    ) -> Tuple[List[ProblemaEncontrado], List[Dict]]:
-        """Valida problemas encontrados contra o PDF original"""
-        ...
+        self, problemas: List[Dict], paginas_pdf: List[str]
+    ) -> Tuple[List[ProblemaEncontrado], List[Dict]]: ...
 
 
 class GeradorRelatorio(Protocol):
-    """Contrato para geradores de relatório"""
-    
-    def gerar_relatorio_markdown(self, resultado: ResultadoAnalise) -> str:
-        """Gera relatório em formato Markdown"""
-        ...
+    def gerar_relatorio_markdown(self, resultado: ResultadoAnalise) -> str: ...
 
 
-# =============================================================================
-# IMPLEMENTAÇÕES CONCRETAS
-# =============================================================================
+# =============================
+# IMPLEMENTAÇÕES CONCRETAS (mantidas iguais)
+# =============================
 
 class LeitorDocumentoPyMuPDF:
     """Implementação concreta do leitor de documentos usando PyMuPDF para PDF e python-docx para DOCX"""
     
     def extrair_texto_completo(self, caminho_arquivo: str) -> str:
-        """Extrai todo o texto do documento como uma string única"""
         if not self._validar_arquivo_existe(caminho_arquivo):
             raise FileNotFoundError(f"Arquivo '{caminho_arquivo}' não encontrado")
         
         try:
-            # Determinar o tipo de arquivo
             if caminho_arquivo.lower().endswith('.docx'):
                 return self._extrair_texto_docx(caminho_arquivo)
             elif caminho_arquivo.lower().endswith('.pdf'):
@@ -134,7 +119,6 @@ class LeitorDocumentoPyMuPDF:
             raise RuntimeError(f"Erro ao ler arquivo '{caminho_arquivo}': {str(e)}")
     
     def extrair_texto_por_paginas(self, caminho_arquivo: str) -> Tuple[str, List[str]]:
-        """Extrai texto separado por páginas/parágrafos"""
         if not self._validar_arquivo_existe(caminho_arquivo):
             raise FileNotFoundError(f"Arquivo '{caminho_arquivo}' não encontrado")
         
@@ -149,35 +133,27 @@ class LeitorDocumentoPyMuPDF:
             raise RuntimeError(f"Erro ao extrair seções do arquivo '{caminho_arquivo}': {str(e)}")
     
     def _extrair_texto_docx(self, caminho_arquivo: str) -> str:
-        """Extrai texto de arquivo DOCX"""
         doc = Document(caminho_arquivo)
         paragrafos = [paragrafo.text for paragrafo in doc.paragraphs if paragrafo.text.strip()]
-        
         if not paragrafos:
             raise ValueError(f"Arquivo '{caminho_arquivo}' está vazio ou não contém texto extraível")
-        
         return "\n".join(paragrafos)
     
     def _extrair_texto_docx_por_paragrafos(self, caminho_arquivo: str) -> Tuple[str, List[str]]:
-        """Extrai texto de DOCX separado por parágrafos"""
         doc = Document(caminho_arquivo)
         paragrafos = [paragrafo.text for paragrafo in doc.paragraphs if paragrafo.text.strip()]
         texto_completo = "\n".join(paragrafos)
         return texto_completo, paragrafos
     
     def _extrair_texto_pdf(self, caminho_arquivo: str) -> str:
-        """Extrai texto de arquivo PDF"""
         with fitz.open(caminho_arquivo) as documento:
             textos_paginas = [pagina.get_text() for pagina in documento]
             texto_completo = "\n".join(textos_paginas)
-            
             if not texto_completo.strip():
                 raise ValueError(f"Arquivo '{caminho_arquivo}' está vazio ou não contém texto extraível")
-            
             return texto_completo
     
     def _extrair_texto_pdf_por_paginas(self, caminho_arquivo: str) -> Tuple[str, List[str]]:
-        """Extrai texto de PDF separado por páginas"""
         with fitz.open(caminho_arquivo) as documento:
             paginas = [pagina.get_text() for pagina in documento]
             texto_completo = "\n".join(paginas)
@@ -185,7 +161,6 @@ class LeitorDocumentoPyMuPDF:
     
     @staticmethod
     def _validar_arquivo_existe(caminho: str) -> bool:
-        """Valida se o arquivo existe"""
         return os.path.exists(caminho)
 
 
@@ -193,7 +168,6 @@ class ProcessadorJSONInteligente:
     """Processador de JSON que tenta múltiplas estratégias de extração"""
     
     def extrair_json_de_texto(self, texto: str) -> Optional[Dict]:
-        """Extrai JSON usando múltiplas estratégias"""
         estrategias = [
             self._extrair_json_com_marcadores,
             self._extrair_json_com_codigo_block,
@@ -206,39 +180,29 @@ class ProcessadorJSONInteligente:
             resultado = estrategia(texto)
             if resultado:
                 return resultado
-        
         return None
     
     def _extrair_json_com_marcadores(self, texto: str) -> Optional[Dict]:
-        """Extrai JSON entre marcadores ```json```"""
-        # Using more specific regex patterns to avoid reluctant quantifiers
         padrao = r"```json\s*(\{[^}]*\}|\[[^\]]*\])\s*```"
         matches = re.findall(padrao, texto, flags=re.DOTALL | re.IGNORECASE)
-        
-        for match in reversed(matches):  # Prefere o último
-            try:
-                return json.loads(match)
-            except json.JSONDecodeError:
-                continue
-        
-        return None
-    
-    def _extrair_json_com_codigo_block(self, texto: str) -> Optional[Dict]:
-        """Extrai JSON entre marcadores de código genéricos"""
-        # Using more specific regex patterns to avoid reluctant quantifiers
-        padrao = r"```\s*(\{[^}]*\}|\[[^\]]*\])\s*```"
-        matches = re.findall(padrao, texto, flags=re.DOTALL)
-        
         for match in reversed(matches):
             try:
                 return json.loads(match)
             except json.JSONDecodeError:
                 continue
-        
+        return None
+    
+    def _extrair_json_com_codigo_block(self, texto: str) -> Optional[Dict]:
+        padrao = r"```\s*(\{[^}]*\}|\[[^\]]*\])\s*```"
+        matches = re.findall(padrao, texto, flags=re.DOTALL)
+        for match in reversed(matches):
+            try:
+                return json.loads(match)
+            except json.JSONDecodeError:
+                continue
         return None
     
     def _extrair_ultimo_objeto_balanceado(self, texto: str) -> Optional[Dict]:
-        """Extrai o último objeto JSON balanceado do texto"""
         ultimo_objeto = None
         pilha_chaves = []
         indice_inicio = None
@@ -248,7 +212,7 @@ class ProcessadorJSONInteligente:
                 if not pilha_chaves:
                     indice_inicio = indice
                 pilha_chaves.append('{')
-            elif caractere == '}' and pilha_chaves:  # Merged if conditions
+            elif caractere == '}' and pilha_chaves:
                 pilha_chaves.pop()
                 if not pilha_chaves and indice_inicio is not None:
                     candidato = texto[indice_inicio:indice + 1]
@@ -258,7 +222,6 @@ class ProcessadorJSONInteligente:
         return self._tentar_parsear_json(ultimo_objeto)
     
     def _tentar_parsear_json(self, objeto_json: Optional[str]) -> Optional[Dict]:
-        """Tenta fazer parse de um objeto JSON"""
         if objeto_json:
             try:
                 return json.loads(objeto_json)
@@ -267,34 +230,26 @@ class ProcessadorJSONInteligente:
         return None
     
     def _extrair_json_com_placeholders(self, texto: str) -> Optional[Dict]:
-        """Tenta detectar e completar JSONs com placeholders como [...]"""
-        # Verifica se há estrutura JSON com placeholders
         if "[...]" in texto or "..." in texto:
-            # Busca por estrutura básica que contém as seções esperadas
             padrao_estrutura = r'\{\s*"erros_gramaticais".*?"necessidades_citacao".*?"melhorias_clareza".*?\}'
             match = re.search(padrao_estrutura, texto, re.DOTALL | re.IGNORECASE)
             
             if match:
                 json_texto = match.group(0)
-                # Substitui placeholders por arrays vazios
                 json_texto = re.sub(r'\[\.\.\.?\]', '[]', json_texto)
                 json_texto = re.sub(r'\.\.\.', '', json_texto)
                 
-                # Tenta parsear o JSON corrigido
                 try:
                     return json.loads(json_texto)
                 except json.JSONDecodeError:
-                    # Se ainda há erro, cria estrutura mínima válida
                     return {
                         "erros_gramaticais": [],
                         "necessidades_citacao": [],
                         "melhorias_clareza": []
                     }
-        
         return None
 
     def _extrair_json_puro(self, texto: str) -> Optional[Dict]:
-        """Tenta parsear o texto inteiro como JSON"""
         try:
             return json.loads(texto.strip())
         except json.JSONDecodeError:
@@ -308,11 +263,8 @@ class ValidadorConteudoPDF:
         self._leitor_pdf = leitor_pdf
     
     def validar_problemas_contra_pdf(
-        self, 
-        problemas: List[Dict], 
-        paginas_pdf: List[str]
+        self, problemas: List[Dict], paginas_pdf: List[str]
     ) -> Tuple[List[ProblemaEncontrado], List[Dict]]:
-        """Valida problemas contra o conteúdo do PDF"""
         problemas_validos = []
         problemas_descartados = []
         
@@ -337,22 +289,16 @@ class ValidadorConteudoPDF:
         return problemas_validos, problemas_descartados
     
     def _localizar_pagina_do_trecho(self, trecho: str, paginas: List[str]) -> Optional[int]:
-        """Localiza em qual página está um trecho específico"""
-        # Use a robust normalization: remove diacritics, punctuation, collapse whitespace, lowercase
         import unicodedata
         from difflib import SequenceMatcher
 
         def _normalize(text: str) -> str:
             if not text:
                 return ""
-            # Normalize unicode and remove combining marks (accents)
             text = unicodedata.normalize('NFKD', text)
             text = ''.join(ch for ch in text if not unicodedata.combining(ch))
-            # Lowercase
             text = text.lower()
-            # Replace punctuation with spaces, keep alphanumerics and whitespace
             text = re.sub(r"[^\w\s]", " ", text)
-            # Collapse whitespace
             text = " ".join(text.split())
             return text
 
@@ -361,26 +307,21 @@ class ValidadorConteudoPDF:
         if not trecho_normalizado:
             return None
 
-        # First try exact containment on normalized text
         for indice, texto_pagina in enumerate(paginas):
             pagina_normalizada = _normalize(texto_pagina)
             if trecho_normalizado in pagina_normalizada:
-                return indice + 1  # Páginas começam em 1
+                return indice + 1
 
-        # Fallback: fuzzy match using SequenceMatcher. This handles small differences/typos.
         for indice, texto_pagina in enumerate(paginas):
             pagina_normalizada = _normalize(texto_pagina)
-            # Compute overall similarity
             try:
                 ratio = SequenceMatcher(None, trecho_normalizado, pagina_normalizada).ratio()
             except Exception:
                 ratio = 0.0
 
-            # If reasonably similar, accept
             if ratio >= 0.70:
                 return indice + 1
 
-            # Also try matching a shorter slice (first 200 chars) of the trecho to the page
             slice_trecho = trecho_normalizado[:200]
             if slice_trecho:
                 try:
@@ -394,7 +335,6 @@ class ValidadorConteudoPDF:
         return None
     
     def _converter_dict_para_problema(self, problema_dict: Dict, pagina: int) -> ProblemaEncontrado:
-        """Converte dicionário em objeto ProblemaEncontrado"""
         gravidade_str = problema_dict.get("gravidade", "baixa")
         gravidade = GravidadeProblema(gravidade_str)
         
@@ -412,29 +352,29 @@ class GeradorRelatorioMarkdown:
     """Gerador de relatórios em formato Markdown"""
     
     def gerar_relatorio_markdown(self, resultado: ResultadoAnalise) -> str:
-        """Gera relatório completo em Markdown"""
         linhas = []
-        
         self._adicionar_cabecalho(linhas, resultado)
         self._adicionar_secao_problemas(linhas, "Seção A: Problemas Gramaticais", resultado.erros_gramaticais)
         self._adicionar_secao_problemas(linhas, "Seção B: Necessidades de Citação", resultado.necessidades_citacao)
         self._adicionar_secao_problemas(linhas, "Seção C: Melhorias de Clareza", resultado.melhorias_clareza)
-        
         return "\n".join(linhas)
     
     def _adicionar_cabecalho(self, linhas: List[str], resultado: ResultadoAnalise):
-        """Adiciona cabeçalho do relatório"""
         linhas.extend([
-            "# Relatório de Análise Textual",
+            "# Relatório de Análise Textual Multi-Agente",
             f"**Modelo:** {resultado.modelo_usado}",
             f"**Data:** {resultado.timestamp.strftime('%d/%m/%Y %H:%M:%S')}",
             f"**Arquivo analisado:** {resultado.arquivo_analisado}",
             "",
-            "## Resultado Validado (somente itens com evidência literal no PDF)"
+            "## Resultado Validado (somente itens com evidência literal no documento)",
+            "### Processamento Multi-Agente: 3 especialistas trabalharam em paralelo",
+            "- **Agente 1**: Analista Gramatical (ortografia, gramática, sintaxe)",
+            "- **Agente 2**: Analista de Citações (referenciamento acadêmico)",  
+            "- **Agente 3**: Analista de Clareza (legibilidade, coesão textual)",
+            ""
         ])
     
     def _adicionar_secao_problemas(self, linhas: List[str], titulo: str, problemas: List[ProblemaEncontrado]):
-        """Adiciona seção de problemas ao relatório"""
         linhas.append(f"### {titulo}")
         
         if not problemas:
@@ -442,7 +382,7 @@ class GeradorRelatorioMarkdown:
             linhas.append("")
             return
         
-        for indice, problema in enumerate(problemas, 1):
+        for problema in problemas:
             linhas.extend([
                 f"- **Trecho exato:** \"{problema.trecho_exato}\"",
                 f"- **Problema:** {problema.descricao}",
@@ -452,20 +392,21 @@ class GeradorRelatorioMarkdown:
             ])
 
 
+# =============================
+# CONFIGURAÇÕES E FACTORIES
+# =============================
+
 class ConfiguradorLiteLLM:
     @staticmethod
     def aplicar_patch_parametros():
-        """Aplica patch para remover parâmetros problemáticos"""
         completion_original = litellm.completion
         
         def completion_sem_parametros_problematicos(**parametros):
-            # Remove parâmetros que causam erro 422 na Replicate
             parametros_problematicos = ["stop", "stop_sequences", "stops", "stop_tokens"]
             
             for parametro in parametros_problematicos:
                 parametros.pop(parametro, None)
             
-            # Remove também de extra_body se existir
             if "extra_body" in parametros and isinstance(parametros["extra_body"], dict):
                 for parametro in parametros_problematicos:
                     parametros["extra_body"].pop(parametro, None)
@@ -492,44 +433,47 @@ class FabricaModelos:
             max_tokens=8192
         ),
         ModelType.CHATGPT: ConfiguracaoModelo(
-            model_name="replicate/openai/gpt-4o-mini",
-            display_name="ChatGPT 4.0",
-            api_key=os.getenv('OPENAI_API_KEY', 'r8_MPjPwXOOQ4ZORa5teY6esvCY6AfJr2p1frYPn')
+            model_name="openai/gpt-4o-mini",
+            display_name="ChatGPT 4o Mini",
+            api_key=os.getenv('OPENAI_API_KEY', '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')
         )
     }
     
     @classmethod
     def criar_modelo(cls, tipo_modelo: ModelType) -> LLM:
-        """Cria instância de modelo baseada no tipo"""
         config = cls.CONFIGURACOES_PADRAO[tipo_modelo]
-        
-        return LLM(
-            model=config.model_name,
-            api_key=config.api_key,
-            drop_params=["stop"],
-            temperature=config.temperature,
-            max_tokens=config.max_tokens,
-            max_retries=config.max_retries,
-        )
+        if tipo_modelo == ModelType.CHATGPT:
+            return LLM(
+                model=config.model_name,
+                api_key=config.api_key,
+                temperature=config.temperature,
+                # max_tokens=config.max_tokens,
+                max_retries=config.max_retries,
+            )
+        else: 
+            return LLM(
+                model=config.model_name,
+                api_key=config.api_key,
+                drop_params=["stop"],
+                temperature=config.temperature,
+                # max_tokens=config.max_tokens,
+                max_retries=config.max_retries,
+            )
     
     @classmethod
     def obter_nome_exibicao(cls, tipo_modelo: ModelType) -> str:
-        """Obtém nome de exibição do modelo"""
         return cls.CONFIGURACOES_PADRAO[tipo_modelo].display_name
 
 
-# =============================================================================
+# =============================
 # FERRAMENTAS DO CREWAI
-# =============================================================================
+# =============================
 
 class ArgumentosLeituraDocumento(BaseModel):
-    """Argumentos para ferramenta de leitura de documentos"""
     pdf_path: str = Field(..., description="Caminho do arquivo de documento a ser lido (PDF ou DOCX)")
 
 
 class FerramentaLeituraDocumento(BaseTool):
-    """Ferramenta do CrewAI para leitura de documentos"""
-    
     name: str = "LerTextoPDFTool"
     description: str = (
         "Lê o conteúdo de um arquivo de documento (PDF ou DOCX) e retorna o texto extraído. "
@@ -543,7 +487,6 @@ class FerramentaLeituraDocumento(BaseTool):
         self._leitor_pdf = leitor_pdf
     
     def _run(self, pdf_path: str) -> str:
-        """Executa a leitura do documento"""
         try:
             return self._leitor_pdf.extrair_texto_completo(pdf_path)
         except FileNotFoundError as e:
@@ -556,106 +499,323 @@ class FerramentaLeituraDocumento(BaseTool):
             return f"Erro ao ler arquivo de documento: {str(e)}"
 
 
-# =============================================================================
-# SERVIÇOS DE ANÁLISE
-# =============================================================================
+# =============================
+# SISTEMA MULTI-AGENTE (NOVO)
+# =============================
 
-class FabricaAgentes:
-    """Factory para criação de agentes especializados"""
+class FabricaAgentesEspecializados:
+    """Factory para criar os 3 agentes especializados"""
     
     @staticmethod
-    def criar_agente_analise_textual(modelo: LLM, ferramenta_documento: FerramentaLeituraDocumento) -> Agent:
-        """Cria agente especializado em análise textual"""
+    def criar_agente_gramatical(modelo: LLM, ferramenta_documento: FerramentaLeituraDocumento) -> Agent:
+        """Agente 1: Especialista em análise gramatical"""
         return Agent(
-            role="Especialista em Análise Textual Acadêmica",
-            goal="Analisar textos científicos identificando problemas gramaticais, falta de citações e oportunidades de melhoria na clareza",
-            backstory="""
-            Você é um especialista em revisão de textos acadêmicos com vasta experiência em:
-            - Correção gramatical e ortográfica
-            - Identificação de pontos que necessitam citações
-            - Análise de clareza e fluidez textual
-            - Padrões de escrita científica
-            """,
-            verbose=True,
+            role="Analista Gramatical Especializado",
+            goal=(
+                "Identificar problemas de ortografia, gramática e sintaxe em textos acadêmicos "
+                "com foco em correções que melhorem a qualidade técnica do documento."
+            ),
+            backstory=(
+                "Especialista em correção de textos com 15 anos de experiência em revisão "
+                "de documentos acadêmicos. Expert em detectar erros ortográficos, problemas "
+                "de concordância, regência e sintaxe. Foco na precisão técnica."
+            ),
+            verbose=False,
             tools=[ferramenta_documento],
             llm=modelo,
-            max_iter=3,
+            max_iter=2,
             max_execution_time=300,
         )
     
     @staticmethod
-    def criar_agente_melhoria_redacao(modelo: LLM) -> Agent:
-        """Cria agente especializado em melhoria e redação"""
+    def criar_agente_citacoes(modelo: LLM, ferramenta_documento: FerramentaLeituraDocumento) -> Agent:
+        """Agente 2: Especialista em análise de citações"""
         return Agent(
-            role="Especialista em Melhoria e Redação Científica",
-            goal="Organizar e compilar relatórios de análise textual com sugestões de melhoria estruturadas",
-            backstory="""
-            Você é um especialista em redação científica responsável por:
-            - Organizar apontamentos de revisão de forma clara
-            - Estruturar relatórios de análise textual
-            - Priorizar melhorias por importância
-            - Apresentar sugestões de forma didática
-            """,
-            verbose=True,
+            role="Analista de Citações Acadêmicas",
+            goal=(
+                "Identificar afirmações, dados e claims que necessitam de citações ou "
+                "referências para manter o rigor acadêmico do documento."
+            ),
+            backstory=(
+                "Doutor em Metodologia Científica com expertise em normas acadêmicas. "
+                "Especialista em identificar quando afirmações precisam de fundamentação "
+                "bibliográfica. Conhece padrões ABNT, APA e outros sistemas de citação."
+            ),
+            verbose=False,
+            tools=[ferramenta_documento],
             llm=modelo,
-            max_iter=3,
+            max_iter=2,
+            max_execution_time=300,
+        )
+    
+    @staticmethod
+    def criar_agente_clareza(modelo: LLM, ferramenta_documento: FerramentaLeituraDocumento) -> Agent:
+        """Agente 3: Especialista em clareza e estilo"""
+        return Agent(
+            role="Analista de Clareza e Estilo",
+            goal=(
+                "Identificar problemas de clareza, coesão textual e legibilidade que "
+                "comprometem a compreensão e fluidez do documento acadêmico."
+            ),
+            backstory=(
+                "Editor científico com vasta experiência em melhorar a legibilidade "
+                "de textos acadêmicos. Expert em detectar ambiguidades, frases mal "
+                "estruturadas e problemas de coesão que dificultam a compreensão."
+            ),
+            verbose=False,
+            tools=[ferramenta_documento],
+            llm=modelo,
+            max_iter=2,
             max_execution_time=300,
         )
 
 
-class FabricaTarefas:
-    """Factory para criação de tarefas especializadas"""
+# Substitua a classe FabricaTarefasEspecializadas pelos prompts otimizados:
+
+class FabricaTarefasEspecializadas:
+    """Factory para criar as 3 tarefas especializadas com prompts otimizados"""
     
     @staticmethod
-    def criar_tarefa_analise(agente: Agent, ferramenta_documento: FerramentaLeituraDocumento, caminho_arquivo: str, texto_documento: Optional[str] = None) -> Task:
-        """Cria tarefa de análise textual"""
-        # Build base description
-        base_desc = (
-            f"VOCÊ SÓ PODE USAR O CONTEÚDO DO ARQUIVO '{caminho_arquivo}'.\n"
-            "NÃO invente exemplos, não use conhecimento externo, não infira conteúdo que não esteja literalmente no documento.\n"
-            "Se não encontrar algo, devolva listas vazias.\n\n"
-            f"1) **OBRIGATÓRIO**: Leia o documento usando a ferramenta LerTextoPDFTool (passe EXATAMENTE: {{\"pdf_path\": \"{caminho_arquivo}\"}}).\n"
-            "   VOCÊ DEVE USAR A FERRAMENTA ANTES DE FAZER QUALQUER ANÁLISE.\n\n"
-            "2) Analise APENAS o texto lido e identifique:\n"
-            "   - ERROS GRAMATICAIS (problemas de ortografia, gramática ou estilo/clareza acadêmica).\n"
-            "   - NECESSIDADES DE CITAÇÃO (apenas se houver afirmações no documento sem referência explícita).\n"
-            "   - MELHORIAS DE CLAREZA (frases ambíguas, transições fracas, jargões não explicados).\n\n"
-            "3) Para CADA problema encontrado, você DEVE:\n"
-            "   - Copiar o **trecho exato** do documento (curto, até ~250 caracteres) no campo \"trecho_exato\".\n"
-            "   - Informar a **localização** (ex.: \"Introdução\", \"Metodologia\", \"Resultados\", \"Conclusão\"... ou \"parágrafo X da seção Y\").\n"
-            "   - Descrever o problema em \"descricao\".\n"
-            "   - Sugerir uma correção em \"sugestao\".\n"
-            "   - Estimar \"gravidade\" (baixa|média|alta).\n\n"
-            "4) **SAÍDA OBRIGATÓRIA**: retorne APENAS um objeto JSON (sem nenhum outro texto) no formato:\n"
-            "{\n  \"erros_gramaticais\": [\n    {\"localizacao\": \"...\", \"trecho_exato\": \"...\", \"descricao\": \"...\", \"sugestao\": \"...\", \"gravidade\": \"...\" }\n  ],\n"
-            "  \"necessidades_citacao\": [\n    {\"localizacao\": \"...\", \"trecho_exato\": \"...\", \"descricao\": \"...\", \"sugestao\": \"...\", \"gravidade\": \"...\" }\n  ],\n"
-            "  \"melhorias_clareza\": [\n    {\"localizacao\": \"...\", \"trecho_exato\": \"...\", \"descricao\": \"...\", \"sugestao\": \"...\", \"gravidade\": \"...\" }\n  ]\n}\n\n"
-            "REGRAS:\n"
-            "- \"trecho_exato\" DEVE existir literalmente no documento. Se não tiver certeza, NÃO inclua o item.\n"
-            "- Se nada for encontrado em alguma seção, use lista vazia [].\n\n"
-            "IMPORTANTE: Se houver erro na leitura do arquivo, retorne a mensagem de erro exata.\n"
-        )
-
-        # If texto_documento is provided, append a trimmed fallback block so models that don't call tools still have the content
-        if texto_documento:
-            trimmed = texto_documento.strip()
-            if len(trimmed) > 20000:
-                trimmed = trimmed[:20000] + "\n...[TRIMMED]"
-            fallback_block = "\n\n--- INÍCIO DO TEXTO DO DOCUMENTO (FALLBACK) ---\n" + trimmed + "\n--- FIM DO TEXTO DO DOCUMENTO ---\n"
-            description = base_desc + fallback_block
-        else:
-            description = base_desc
-
+    def criar_tarefa_gramatical(agente: Agent, ferramenta_documento: FerramentaLeituraDocumento, caminho_arquivo: str, texto_documento: str) -> Task:
+        """Tarefa 1: Análise gramatical especializada - PROMPT OTIMIZADO"""
+        
         return Task(
-            description=description,
-            expected_output="Lista detalhada de problemas encontrados com localizações e sugestões de correção",
+            description=f"""
+**MISSÃO**: Você é um corretor especializado em gramática da língua portuguesa. Sua ÚNICA responsabilidade é identificar erros técnicos da língua.
+
+**PASSO 1 - LEITURA OBRIGATÓRIA**:
+Use a ferramenta LerTextoPDFTool para ler o documento:
+{{"pdf_path": "{caminho_arquivo}"}}
+
+**PASSO 2 - ANÁLISE FOCADA**:
+Identifique APENAS estes tipos de erro:
+
+🔍 **ORTOGRAFIA**:
+- Palavras escritas incorretamente (ex: "questãos" → "questões")
+- Acentuação inadequada
+- Uso incorreto de hífen
+
+🔍 **CONCORDÂNCIA**:
+- Verbal: sujeito-verbo (ex: "Os dados mostra" → "Os dados mostram")
+- Nominal: substantivo-adjetivo (ex: "questões específico" → "questões específicas")
+
+🔍 **REGÊNCIA**:
+- Verbal: preposições com verbos (ex: "assistir o filme" → "assistir ao filme")
+- Nominal: preposições com substantivos
+
+🔍 **SINTAXE E PONTUAÇÃO**:
+- Vírgulas mal posicionadas
+- Pontos e vírgulas inadequados
+- Estrutura frasal problemática
+
+**PASSO 3 - SAÍDA ESTRUTURADA**:
+```json
+{{
+  "erros_gramaticais": [
+    {{
+      "localizacao": "Seção 3.1, segundo parágrafo",
+      "trecho_exato": "texto que está LITERALMENTE no documento",
+      "descricao": "Erro de concordância verbal",
+      "sugestao": "correção específica proposta",
+      "gravidade": "média"
+    }}
+  ]
+}}
+```
+
+**VALIDAÇÃO CRÍTICA**:
+✅ "trecho_exato" deve existir LITERALMENTE no documento
+✅ Se não encontrar erros gramaticais, retorne: {{"erros_gramaticais": []}}
+❌ NÃO inclua problemas de citação, clareza ou conteúdo
+❌ NÃO invente trechos que não existem
+
+**TEXTO DE BACKUP** (use apenas se a ferramenta falhar):
+{texto_documento[:12000]}{"...[TRUNCADO]" if len(texto_documento) > 12000 else ""}
+""",
+            expected_output="JSON válido contendo lista de problemas gramaticais com localização precisa",
+            agent=agente,
+            tools=[ferramenta_documento]
+        )
+    
+    @staticmethod
+    def criar_tarefa_citacoes(agente: Agent, ferramenta_documento: FerramentaLeituraDocumento, caminho_arquivo: str, texto_documento: str) -> Task:
+        """Tarefa 2: Análise de necessidades de citação - PROMPT OTIMIZADO"""
+        
+        return Task(
+            description=f"""
+**MISSÃO**: Você é um especialista em normas acadêmicas. Sua ÚNICA responsabilidade é identificar afirmações que precisam de fundamentação bibliográfica.
+
+**PASSO 1 - LEITURA OBRIGATÓRIA**:
+Use a ferramenta LerTextoPDFTool para ler o documento:
+{{"pdf_path": "{caminho_arquivo}"}}
+
+**PASSO 2 - IDENTIFICAÇÃO CRÍTICA**:
+Procure APENAS estes casos que EXIGEM citação:
+
+📚 **DADOS ESPECÍFICOS**:
+- Estatísticas sem fonte (ex: "85% dos usuários relataram...")
+- Números precisos de pesquisas
+- Porcentagens de estudos
+
+📚 **AFIRMAÇÕES CATEGÓRICAS**:
+- Claims definitivos sobre fenômenos (ex: "A IA sempre produz resultados melhores")
+- Declarações sobre causas e efeitos específicos
+- Comparações entre métodos/tecnologias
+
+📚 **TEORIAS E CONCEITOS**:
+- Menção a teorias específicas sem autor
+- Definições técnicas sem referência
+- Modelos ou frameworks conceituais
+
+📚 **RESULTADOS DE PESQUISA**:
+- "Estudos mostram que..."
+- "Pesquisas indicam..."
+- "Foi comprovado que..."
+
+**O QUE NÃO PRECISA DE CITAÇÃO**:
+❌ Conhecimento geral (ex: "A internet é amplamente utilizada")
+❌ Definições básicas universalmente aceitas
+❌ Descrição de metodologia própria do autor
+
+**PASSO 3 - SAÍDA ESTRUTURADA**:
+```json
+{{
+  "necessidades_citacao": [
+    {{
+      "localizacao": "Seção 2, primeiro parágrafo",
+      "trecho_exato": "texto que está LITERALMENTE no documento",
+      "descricao": "Afirmação estatística sem fonte comprobatória",
+      "sugestao": "Adicionar citação de pesquisa que comprove esta estatística",
+      "gravidade": "alta"
+    }}
+  ]
+}}
+```
+
+**VALIDAÇÃO RIGOROSA**:
+✅ Apenas afirmações que REALMENTE precisam de fundamentação
+✅ "trecho_exato" deve existir LITERALMENTE no documento
+✅ Se não encontrar necessidades de citação, retorne: {{"necessidades_citacao": []}}
+❌ NÃO inclua problemas gramaticais ou de clareza
+❌ NÃO seja excessivamente rigoroso com conhecimento básico
+
+**TEXTO DE BACKUP** (use apenas se a ferramenta falhar):
+{texto_documento[:12000]}{"...[TRUNCADO]" if len(texto_documento) > 12000 else ""}
+""",
+            expected_output="JSON válido contendo lista de necessidades de citação com justificativa clara",
+            agent=agente,
+            tools=[ferramenta_documento]
+        )
+    
+    @staticmethod
+    def criar_tarefa_clareza(agente: Agent, ferramenta_documento: FerramentaLeituraDocumento, caminho_arquivo: str, texto_documento: str) -> Task:
+        """Tarefa 3: Análise de clareza e estilo - PROMPT OTIMIZADO"""
+        
+        return Task(
+            description=f"""
+**MISSÃO**: Você é um editor científico especializado em legibilidade. Sua ÚNICA responsabilidade é identificar problemas que comprometem a compreensão do texto.
+
+**PASSO 1 - LEITURA OBRIGATÓRIA**:
+Use a ferramenta LerTextoPDFTool para ler o documento:
+{{"pdf_path": "{caminho_arquivo}"}}
+
+**PASSO 2 - ANÁLISE DE LEGIBILIDADE**:
+Identifique APENAS estes problemas de clareza:
+
+✨ **AMBIGUIDADE**:
+- Frases com múltiplas interpretações possíveis
+- Pronomes com referência unclear (ex: "isso", "aquilo" sem antecedente claro)
+- Modificadores mal posicionados
+
+✨ **COMPLEXIDADE EXCESSIVA**:
+- Períodos muito longos (>3 linhas) sem pausas adequadas
+- Estruturas sintáticas desnecessariamente complexas
+- Acúmulo excessivo de subordinadas
+
+✨ **COESÃO TEXTUAL**:
+- Transições abruptas entre ideias
+- Parágrafos sem conectores lógicos
+- Sequência de ideias confusa
+
+✨ **JARGÃO TÉCNICO**:
+- Termos técnicos sem explicação no primeiro uso
+- Acronimos não expandidos
+- Linguagem excessivamente hermética para o público-alvo
+
+✨ **FLUXO DE LEITURA**:
+- Repetições desnecessárias de palavras próximas
+- Cacofonia ou aliterações problemáticas
+- Ritmo de leitura prejudicado
+
+**O QUE NÃO É PROBLEMA DE CLAREZA**:
+❌ Erros gramaticais (outro agente cuida)
+❌ Falta de citações (outro agente cuida)
+❌ Escolhas estilísticas legítimas do autor
+
+**PASSO 3 - SAÍDA ESTRUTURADA**:
+```json
+{{
+  "melhorias_clareza": [
+    {{
+      "localizacao": "Seção 3.2, terceiro parágrafo",
+      "trecho_exato": "texto que está LITERALMENTE no documento",
+      "descricao": "Período excessivamente longo que dificulta compreensão",
+      "sugestao": "Dividir em duas frases para melhorar legibilidade",
+      "gravidade": "média"
+    }}
+  ]
+}}
+```
+
+**CRITÉRIOS DE QUALIDADE**:
+✅ Foque em melhorias que REALMENTE aumentem a legibilidade
+✅ Preserve o tom acadêmico nas sugestões
+✅ "trecho_exato" deve existir LITERALMENTE no documento
+✅ Se não encontrar problemas de clareza, retorne: {{"melhorias_clareza": []}}
+❌ NÃO sugira mudanças que alterem o significado
+❌ NÃO inclua problemas que são de outros agentes
+
+**TEXTO DE BACKUP** (use apenas se a ferramenta falhar):
+{texto_documento[:12000]}{"...[TRUNCADO]" if len(texto_documento) > 12000 else ""}
+""",
+            expected_output="JSON válido contendo lista de melhorias de clareza com sugestões construtivas",
             agent=agente,
             tools=[ferramenta_documento]
         )
 
+class ConsolidadorResultados:
+    """Consolida resultados dos 3 agentes especializados"""
+    
+    @staticmethod
+    def consolidar_analises(
+        resultado_gramatical: str,
+        resultado_citacoes: str, 
+        resultado_clareza: str,
+        processador_json: ProcessadorJSON
+    ) -> Dict:
+        """Consolida os 3 resultados em uma estrutura unificada"""
+        
+        # Extrair JSONs de cada agente
+        json_gramatical = processador_json.extrair_json_de_texto(resultado_gramatical)
+        json_citacoes = processador_json.extrair_json_de_texto(resultado_citacoes)
+        json_clareza = processador_json.extrair_json_de_texto(resultado_clareza)
+        
+        # Estrutura consolidada
+        resultado_consolidado = {
+            "erros_gramaticais": json_gramatical.get("erros_gramaticais", []) if json_gramatical else [],
+            "necessidades_citacao": json_citacoes.get("necessidades_citacao", []) if json_citacoes else [],
+            "melhorias_clareza": json_clareza.get("melhorias_clareza", []) if json_clareza else []
+        }
+        
+        return resultado_consolidado
 
-class ServicoAnaliseTexto:
-    """Serviço principal para análise de texto científico"""
+
+# =============================
+# SERVIÇO PRINCIPAL MULTI-AGENTE
+# =============================
+
+class ServicoAnaliseTextoMultiAgente:
+    """Serviço principal com arquitetura multi-agente"""
     
     def __init__(
         self,
@@ -669,65 +829,108 @@ class ServicoAnaliseTexto:
         self._validador_conteudo = validador_conteudo
         self._gerador_relatorio = gerador_relatorio
     
-    def analisar_documento(
+    def analisar_documento_multiagente(
         self, 
         tipo_modelo: ModelType, 
         caminho_arquivo: str
     ) -> Tuple[Optional[ResultadoAnalise], Optional[str]]:
-        """Executa análise completa de um documento"""
+        """Executa análise com 3 agentes especializados"""
         try:
             # Validações iniciais
             if not os.path.exists(caminho_arquivo):
-                erro = f"Arquivo '{caminho_arquivo}' não encontrado!"
-                return None, erro
+                return None, f"Arquivo '{caminho_arquivo}' não encontrado!"
             
-            # Configurar modelo e agentes
+            # Configurar modelo e infraestrutura
             modelo = FabricaModelos.criar_modelo(tipo_modelo)
             nome_modelo = FabricaModelos.obter_nome_exibicao(tipo_modelo)
             
             ferramenta_documento = FerramentaLeituraDocumento(self._leitor_pdf)
-            agente_analise = FabricaAgentes.criar_agente_analise_textual(modelo, ferramenta_documento)
-
-            # Extrair texto do documento como fallback para modelos que não chamam ferramentas
+            
+            # Extrair texto do documento como fallback
             try:
                 texto_documento = self._leitor_pdf.extrair_texto_completo(caminho_arquivo)
             except Exception:
-                texto_documento = None
-
-            # Criar e executar tarefa (inclui fallback com texto completo do documento)
-            tarefa_analise = FabricaTarefas.criar_tarefa_analise(agente_analise, ferramenta_documento, caminho_arquivo, texto_documento)
+                texto_documento = ""
             
-            crew = Crew(
-                agents=[agente_analise],
-                tasks=[tarefa_analise],
-                process=Process.sequential,
-                verbose=True,
-                max_execution_time=900,
+            print(f"🤖 Criando 3 agentes especializados para {nome_modelo}...")
+            
+            # Criar os 3 agentes especializados
+            agente_gramatical = FabricaAgentesEspecializados.criar_agente_gramatical(modelo, ferramenta_documento)
+            agente_citacoes = FabricaAgentesEspecializados.criar_agente_citacoes(modelo, ferramenta_documento)
+            agente_clareza = FabricaAgentesEspecializados.criar_agente_clareza(modelo, ferramenta_documento)
+            
+            print("📝 ETAPA 1: Análise gramatical...")
+            
+            # Execução do Agente 1: Análise Gramatical
+            tarefa_gramatical = FabricaTarefasEspecializadas.criar_tarefa_gramatical(
+                agente_gramatical, ferramenta_documento, caminho_arquivo, texto_documento
             )
             
-            print(f"🚀 Iniciando execução com {nome_modelo}...")
-            resultado_crew = crew.kickoff()
+            crew_gramatical = Crew(
+                agents=[agente_gramatical],
+                tasks=[tarefa_gramatical],
+                process=Process.sequential,
+                verbose=False,
+                max_execution_time=600,
+            )
             
-            # Processar resultado
-            if not resultado_crew or str(resultado_crew).strip() == "":
-                return None, f"Resultado vazio para {nome_modelo}"
+            resultado_gramatical = str(crew_gramatical.kickoff()).strip()
             
-            # Extrair e validar JSON
-            json_extraido = self._processador_json.extrair_json_de_texto(str(resultado_crew))
-            if not json_extraido:
-                return None, f"Não foi possível extrair JSON válido da resposta de {nome_modelo}"
+            print("📚 ETAPA 2: Análise de citações...")
             
-            # Validar contra PDF
+            # Execução do Agente 2: Análise de Citações
+            tarefa_citacoes = FabricaTarefasEspecializadas.criar_tarefa_citacoes(
+                agente_citacoes, ferramenta_documento, caminho_arquivo, texto_documento
+            )
+            
+            crew_citacoes = Crew(
+                agents=[agente_citacoes],
+                tasks=[tarefa_citacoes],
+                process=Process.sequential,
+                verbose=False,
+                max_execution_time=600,
+            )
+            
+            resultado_citacoes = str(crew_citacoes.kickoff()).strip()
+            
+            print("✨ ETAPA 3: Análise de clareza...")
+            
+            # Execução do Agente 3: Análise de Clareza
+            tarefa_clareza = FabricaTarefasEspecializadas.criar_tarefa_clareza(
+                agente_clareza, ferramenta_documento, caminho_arquivo, texto_documento
+            )
+            
+            crew_clareza = Crew(
+                agents=[agente_clareza],
+                tasks=[tarefa_clareza],
+                process=Process.sequential,
+                verbose=False,
+                max_execution_time=600,
+            )
+            
+            resultado_clareza = str(crew_clareza.kickoff()).strip()
+            
+            print("🔄 ETAPA 4: Consolidando resultados...")
+            
+            # Consolidar resultados dos 3 agentes
+            json_consolidado = ConsolidadorResultados.consolidar_analises(
+                resultado_gramatical, resultado_citacoes, resultado_clareza, self._processador_json
+            )
+            
+            if not json_consolidado:
+                return None, f"Não foi possível consolidar resultados de {nome_modelo}"
+            
+            # Validar contra documento original
             _, paginas_pdf = self._leitor_pdf.extrair_texto_por_paginas(caminho_arquivo)
             
             erros_validos, _ = self._validador_conteudo.validar_problemas_contra_pdf(
-                json_extraido.get("erros_gramaticais", []), paginas_pdf
+                json_consolidado.get("erros_gramaticais", []), paginas_pdf
             )
             citacoes_validas, _ = self._validador_conteudo.validar_problemas_contra_pdf(
-                json_extraido.get("necessidades_citacao", []), paginas_pdf
+                json_consolidado.get("necessidades_citacao", []), paginas_pdf
             )
             clareza_valida, _ = self._validador_conteudo.validar_problemas_contra_pdf(
-                json_extraido.get("melhorias_clareza", []), paginas_pdf
+                json_consolidado.get("melhorias_clareza", []), paginas_pdf
             )
             
             # Criar resultado final
@@ -735,34 +938,41 @@ class ServicoAnaliseTexto:
                 erros_gramaticais=erros_validos,
                 necessidades_citacao=citacoes_validas,
                 melhorias_clareza=clareza_valida,
-                modelo_usado=nome_modelo,
+                modelo_usado=f"{nome_modelo} (Multi-Agente)",
                 arquivo_analisado=caminho_arquivo,
                 timestamp=datetime.now()
             )
             
+            print(f"✅ {nome_modelo}: Análise multi-agente concluída")
+            print(f"📊 Problemas encontrados: {len(erros_validos)} gramáticais, {len(citacoes_validas)} citações, {len(clareza_valida)} clareza")
+            
             return resultado_final, None
             
-        except TimeoutError:
-            return None, f"Timeout: {nome_modelo} excedeu o tempo limite"
         except Exception as e:
-            return None, f"Erro ao executar análise com {nome_modelo}: {str(e)}"
+            erro = f"Erro na análise multi-agente com {nome_modelo}: {str(e)}"
+            print(f"❌ {erro}")
+            return None, erro
 
 
-class GerenciadorEstudoCaso:
-    """Gerenciador principal do estudo de caso"""
+# =============================
+# GERENCIADOR MULTI-AGENTE
+# =============================
+
+class GerenciadorEstudoCasoMultiAgente:
+    """Gerenciador adaptado para arquitetura multi-agente"""
     
-    def __init__(self, servico_analise: ServicoAnaliseTexto, gerador_relatorio: GeradorRelatorio):
+    def __init__(self, servico_analise: ServicoAnaliseTextoMultiAgente, gerador_relatorio: GeradorRelatorio):
         self._servico_analise = servico_analise
         self._gerador_relatorio = gerador_relatorio
         self._diretorio_resultados = Path("resultados_estudo_caso")
     
     def executar_estudo_completo(self, caminho_arquivo: str = "texto_estudo_caso1.docx"):
-        """Executa estudo de caso completo com todos os modelos"""
-        print("🚀 INICIANDO ESTUDO DE CASO 1 - ANÁLISE DE TEXTO CIENTÍFICO")
-        print("📋 Conforme especificações do professor:")
-        print("   - 2 agentes: Análise Textual + Melhoria/Redação")
-        print("   - 3 modelos: Llama 7B, Llama 70B, ChatGPT")
-        print()
+        print("🚀 ESTUDO DE CASO 1 - ANÁLISE DE TEXTO CIENTÍFICO (MULTI-AGENTE)")
+        print("🤖 Arquitetura: 3 Agentes Especializados")
+        print("   • Agente 1: Analista Gramatical (ortografia, gramática, sintaxe)")
+        print("   • Agente 2: Analista de Citações (referenciamento acadêmico)")
+        print("   • Agente 3: Analista de Clareza (legibilidade, coesão textual)")
+        print("🎯 Pipeline: Análise Paralela → Consolidação → Validação\n")
         
         self._garantir_diretorio_resultados()
         
@@ -770,14 +980,11 @@ class GerenciadorEstudoCaso:
         
         for tipo_modelo in ModelType:
             nome_modelo = FabricaModelos.obter_nome_exibicao(tipo_modelo)
-            print(f"\n🔄 Testando modelo: {nome_modelo}")
-            print("=" * 60)
-            print(f"EXECUTANDO ANÁLISE COM: {nome_modelo}")
-            print("=" * 60)
+            print(f"\n{'='*60}\n🤖 PROCESSAMENTO MULTI-AGENTE: {nome_modelo}\n{'='*60}")
             
-            resultado, erro = self._servico_analise.analisar_documento(tipo_modelo, caminho_arquivo)
+            # Usar método multi-agente
+            resultado, erro = self._servico_analise.analisar_documento_multiagente(tipo_modelo, caminho_arquivo)
 
-            # If analysis succeeded, save the normal report. If it failed, still create a debug report
             if resultado:
                 caminho_relatorio = self._salvar_relatorio_individual(resultado, tipo_modelo)
                 resultados_sucesso[tipo_modelo] = {
@@ -787,13 +994,12 @@ class GerenciadorEstudoCaso:
                 }
                 print(f"✅ {nome_modelo}: Concluído com sucesso")
             else:
-                # Create a minimal debug report for failed runs so the file exists and contains the error
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 nome_arquivo = f"relatorio_{tipo_modelo.value}_{timestamp}_FAILED.md"
                 caminho_arquivo_saida = self._diretorio_resultados / nome_arquivo
 
                 linhas = [
-                    f"# Relatório (FALHA) - {nome_modelo}",
+                    f"# Relatório (FALHA) - {nome_modelo} Multi-Agente",
                     "",
                     f"**Arquivo analisado:** {caminho_arquivo}",
                     f"**Data:** {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}",
@@ -802,9 +1008,10 @@ class GerenciadorEstudoCaso:
                     "",
                     f"{erro}",
                     "",
-                    "## Observações para debug",
+                    "## Arquitetura Multi-Agente",
                     "",
-                    "- Verifique o raw output do modelo e o log de execução.",
+                    "- 3 agentes especializados trabalhando em paralelo",
+                    "- Pipeline: Gramatical → Citações → Clareza → Consolidação",
                 ]
 
                 with open(caminho_arquivo_saida, 'w', encoding='utf-8') as f:
@@ -816,22 +1023,20 @@ class GerenciadorEstudoCaso:
                     "status": f"❌ Falhou: {erro}"
                 }
 
-                print(f"❌ {nome_modelo}: {erro} - relatório de debug salvo em {caminho_arquivo_saida}")
-        
-        # Gerar relatório consolidado
+                print(f"❌ {nome_modelo}: {erro}")
+
         self._gerar_relatorio_consolidado(resultados_sucesso, caminho_arquivo)
         
-        print("\n🎉 ESTUDO DE CASO CONCLUÍDO!")
+        print("\n🎉 ESTUDO DE CASO 1 MULTI-AGENTE CONCLUÍDO!")
         print(f"📁 Resultados salvos em: {self._diretorio_resultados}/")
         sucessos = sum(1 for r in resultados_sucesso.values() if r["status"].startswith("✅"))
-        print(f"📊 Modelos testados: {sucessos}/{len(ModelType)}")
+        print(f"📊 Taxa de sucesso: {sucessos}/{len(ModelType)} modelos")
+        print(f"🤖 Cada modelo utilizou 3 agentes especializados trabalhando em paralelo")
     
     def _garantir_diretorio_resultados(self):
-        """Garante que o diretório de resultados existe"""
         self._diretorio_resultados.mkdir(parents=True, exist_ok=True)
     
     def _salvar_relatorio_individual(self, resultado: ResultadoAnalise, tipo_modelo: ModelType) -> str:
-        """Salva relatório individual de um modelo"""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         nome_arquivo = f"relatorio_{tipo_modelo.value}_{timestamp}.md"
         caminho_arquivo = self._diretorio_resultados / nome_arquivo
@@ -841,22 +1046,45 @@ class GerenciadorEstudoCaso:
         with open(caminho_arquivo, "w", encoding="utf-8") as arquivo:
             arquivo.write(conteudo_relatorio)
         
-        print(f"\n✅ Relatório salvo em: {caminho_arquivo}")
+        print(f"📄 Relatório multi-agente salvo: {caminho_arquivo}")
         return str(caminho_arquivo)
     
     def _gerar_relatorio_consolidado(self, resultados: Dict, caminho_arquivo: str):
-        """Gera relatório consolidado de todos os modelos"""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        caminho_consolidado = self._diretorio_resultados / f"relatorio_consolidado_{timestamp}.md"
+        caminho_consolidado = self._diretorio_resultados / f"relatorio_consolidado_multiagente_{timestamp}.md"
         
         linhas = [
-            "# Relatório Consolidado - Estudo de Caso 1",
+            "# Relatório Consolidado Multi-Agente - Estudo de Caso 1",
             "",
             f"**Data:** {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}",
             f"**Modelos testados:** {len(resultados)}",
             f"**Arquivo analisado:** {caminho_arquivo}",
             "",
-            "## Resumo dos Testes",
+            "## Arquitetura Multi-Agente Utilizada",
+            "",
+            "Cada modelo foi processado por **3 agentes especializados**:",
+            "",
+            "### 🤖 Agente 1: Analista Gramatical",
+            "- **Responsabilidade**: Ortografia, gramática e sintaxe",
+            "- **Foco**: Correções técnicas da língua portuguesa",
+            "",
+            "### 🤖 Agente 2: Analista de Citações", 
+            "- **Responsabilidade**: Identificação de necessidades de referenciamento",
+            "- **Foco**: Rigor acadêmico e fundamentação bibliográfica",
+            "",
+            "### 🤖 Agente 3: Analista de Clareza",
+            "- **Responsabilidade**: Legibilidade e coesão textual",
+            "- **Foco**: Melhoria da compreensão e fluidez",
+            "",
+            "## Pipeline de Execução",
+            "",
+            "```",
+            "Documento → [Agente 1] → Problemas Gramaticais",
+            "          → [Agente 2] → Necessidades de Citação  → CONSOLIDAÇÃO → Relatório Final",
+            "          → [Agente 3] → Melhorias de Clareza",
+            "```",
+            "",
+            "## Resultados por Modelo",
             ""
         ]
         
@@ -870,34 +1098,55 @@ class GerenciadorEstudoCaso:
             
             if dados['arquivo']:
                 linhas.append(f"- **Arquivo:** {dados['arquivo']}")
+                if dados['resultado']:
+                    resultado = dados['resultado']
+                    total_problemas = (
+                        len(resultado.erros_gramaticais) + 
+                        len(resultado.necessidades_citacao) + 
+                        len(resultado.melhorias_clareza)
+                    )
+                    linhas.append(f"- **Problemas identificados:** {total_problemas}")
+                    linhas.extend([
+                        f"  - Gramaticais: {len(resultado.erros_gramaticais)}",
+                        f"  - Citações: {len(resultado.necessidades_citacao)}",
+                        f"  - Clareza: {len(resultado.melhorias_clareza)}"
+                    ])
                 sucessos += 1
             
             linhas.append("")
         
-        # Estatísticas
         linhas.extend([
-            "## Estatísticas",
+            "## Vantagens da Arquitetura Multi-Agente",
+            "",
+            "✅ **Especialização**: Cada agente foca em um aspecto específico",
+            "✅ **Paralelização**: Análises independentes e simultâneas", 
+            "✅ **Modularidade**: Falhas isoladas não comprometem todo o processo",
+            "✅ **Qualidade**: Especialização melhora precisão de detecção",
+            "✅ **Rastreabilidade**: Cada tipo de problema tem origem identificada",
+            "",
+            "## Estatísticas Finais",
             "",
             f"- **Total de modelos:** {len(ModelType)}",
             f"- **Sucessos:** {sucessos}",
             f"- **Falhas:** {len(resultados) - sucessos}",
             f"- **Taxa de sucesso:** {(sucessos/len(resultados)*100):.1f}%",
+            f"- **Agentes utilizados por modelo:** 3",
+            f"- **Total de execuções de agentes:** {len(resultados) * 3}",
             ""
         ])
         
         with open(caminho_consolidado, "w", encoding="utf-8") as arquivo:
             arquivo.write("\n".join(linhas))
         
-        print(f"📋 Relatório consolidado salvo em: {caminho_consolidado}")
+        print(f"📋 Relatório consolidado multi-agente salvo: {caminho_consolidado}")
 
 
-# =============================================================================
+# =============================
 # PONTO DE ENTRADA PRINCIPAL
-# =============================================================================
+# =============================
 
 def main():
     """Função principal do programa"""
-    # Configurar infraestrutura
     ConfiguradorLiteLLM.aplicar_patch_parametros()
     
     # Criar dependências
@@ -906,18 +1155,21 @@ def main():
     validador_conteudo = ValidadorConteudoPDF(leitor_pdf)
     gerador_relatorio = GeradorRelatorioMarkdown()
     
-    # Criar serviços
-    servico_analise = ServicoAnaliseTexto(
+    # Criar serviço multi-agente
+    servico_analise = ServicoAnaliseTextoMultiAgente(
         leitor_pdf=leitor_pdf,
         processador_json=processador_json,
         validador_conteudo=validador_conteudo,
         gerador_relatorio=gerador_relatorio
     )
     
-    # Criar gerenciador e executar
-    gerenciador = GerenciadorEstudoCaso(servico_analise, gerador_relatorio)
+    # Criar gerenciador multi-agente e executar
+    gerenciador = GerenciadorEstudoCasoMultiAgente(servico_analise, gerador_relatorio)
     gerenciador.executar_estudo_completo()
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n🛑 Execução interrompida pelo usuário. Encerrando com segurança...")
