@@ -2,6 +2,5 @@
 
 # bibliotecas para instalação
 ```bash
-    pip install crewai
-    pip install PyMuPDF
+    pip install crewai litellm pydantic PyMuPDF python-docx python-dotenv
 ```

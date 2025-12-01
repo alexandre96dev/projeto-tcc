@@ -11,6 +11,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional, Protocol, Tuple, Type, Union
 import json
+from dotenv import load_dotenv
 import os
 import re
 from datetime import datetime
@@ -22,6 +23,7 @@ from crewai.tools import BaseTool
 from pydantic import BaseModel, Field
 from docx import Document
 
+load_dotenv()
 # =============================
 # TIPOS E CONFIGURAÇÕES (mantidos iguais)
 # =============================
@@ -423,19 +425,19 @@ class FabricaModelos:
         ModelType.LLAMA_7B: ConfiguracaoModelo(
             model_name="replicate/meta/meta-llama-3-8b-instruct",
             display_name="Llama 7B",
-            api_key=os.getenv('REPLICATE_API_TOKEN', 'r8_MPjPwXOOQ4ZORa5teY6esvCY6AfJr2p1frYPn')
+            api_key=os.getenv('REPLICATE_API_TOKEN')
         ),
         ModelType.LLAMA_70B: ConfiguracaoModelo(
             model_name="replicate/meta/meta-llama-3-70b-instruct",
             display_name="Llama 70B",
-            api_key=os.getenv('REPLICATE_API_TOKEN', 'r8_MPjPwXOOQ4ZORa5teY6esvCY6AfJr2p1frYPn'),
+            api_key=os.getenv('REPLICATE_API_TOKEN'),
             temperature=0.2,
             max_tokens=8192
         ),
         ModelType.CHATGPT: ConfiguracaoModelo(
             model_name="openai/gpt-4o-mini",
             display_name="ChatGPT 4o Mini",
-            api_key=os.getenv('OPENAI_API_KEY', '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')
+            api_key=os.getenv('OPENAI_API_KEY')
         )
     }
     
@@ -1024,8 +1026,6 @@ class GerenciadorEstudoCasoMultiAgente:
                 }
 
                 print(f"❌ {nome_modelo}: {erro}")
-
-        self._gerar_relatorio_consolidado(resultados_sucesso, caminho_arquivo)
         
         print("\n🎉 ESTUDO DE CASO 1 MULTI-AGENTE CONCLUÍDO!")
         print(f"📁 Resultados salvos em: {self._diretorio_resultados}/")
@@ -1048,97 +1048,6 @@ class GerenciadorEstudoCasoMultiAgente:
         
         print(f"📄 Relatório multi-agente salvo: {caminho_arquivo}")
         return str(caminho_arquivo)
-    
-    def _gerar_relatorio_consolidado(self, resultados: Dict, caminho_arquivo: str):
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        caminho_consolidado = self._diretorio_resultados / f"relatorio_consolidado_multiagente_{timestamp}.md"
-        
-        linhas = [
-            "# Relatório Consolidado Multi-Agente - Estudo de Caso 1",
-            "",
-            f"**Data:** {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}",
-            f"**Modelos testados:** {len(resultados)}",
-            f"**Arquivo analisado:** {caminho_arquivo}",
-            "",
-            "## Arquitetura Multi-Agente Utilizada",
-            "",
-            "Cada modelo foi processado por **3 agentes especializados**:",
-            "",
-            "### 🤖 Agente 1: Analista Gramatical",
-            "- **Responsabilidade**: Ortografia, gramática e sintaxe",
-            "- **Foco**: Correções técnicas da língua portuguesa",
-            "",
-            "### 🤖 Agente 2: Analista de Citações", 
-            "- **Responsabilidade**: Identificação de necessidades de referenciamento",
-            "- **Foco**: Rigor acadêmico e fundamentação bibliográfica",
-            "",
-            "### 🤖 Agente 3: Analista de Clareza",
-            "- **Responsabilidade**: Legibilidade e coesão textual",
-            "- **Foco**: Melhoria da compreensão e fluidez",
-            "",
-            "## Pipeline de Execução",
-            "",
-            "```",
-            "Documento → [Agente 1] → Problemas Gramaticais",
-            "          → [Agente 2] → Necessidades de Citação  → CONSOLIDAÇÃO → Relatório Final",
-            "          → [Agente 3] → Melhorias de Clareza",
-            "```",
-            "",
-            "## Resultados por Modelo",
-            ""
-        ]
-        
-        sucessos = 0
-        for tipo_modelo, dados in resultados.items():
-            nome_modelo = FabricaModelos.obter_nome_exibicao(tipo_modelo)
-            linhas.extend([
-                f"### {nome_modelo}",
-                f"- **Status:** {dados['status']}",
-            ])
-            
-            if dados['arquivo']:
-                linhas.append(f"- **Arquivo:** {dados['arquivo']}")
-                if dados['resultado']:
-                    resultado = dados['resultado']
-                    total_problemas = (
-                        len(resultado.erros_gramaticais) + 
-                        len(resultado.necessidades_citacao) + 
-                        len(resultado.melhorias_clareza)
-                    )
-                    linhas.append(f"- **Problemas identificados:** {total_problemas}")
-                    linhas.extend([
-                        f"  - Gramaticais: {len(resultado.erros_gramaticais)}",
-                        f"  - Citações: {len(resultado.necessidades_citacao)}",
-                        f"  - Clareza: {len(resultado.melhorias_clareza)}"
-                    ])
-                sucessos += 1
-            
-            linhas.append("")
-        
-        linhas.extend([
-            "## Vantagens da Arquitetura Multi-Agente",
-            "",
-            "✅ **Especialização**: Cada agente foca em um aspecto específico",
-            "✅ **Paralelização**: Análises independentes e simultâneas", 
-            "✅ **Modularidade**: Falhas isoladas não comprometem todo o processo",
-            "✅ **Qualidade**: Especialização melhora precisão de detecção",
-            "✅ **Rastreabilidade**: Cada tipo de problema tem origem identificada",
-            "",
-            "## Estatísticas Finais",
-            "",
-            f"- **Total de modelos:** {len(ModelType)}",
-            f"- **Sucessos:** {sucessos}",
-            f"- **Falhas:** {len(resultados) - sucessos}",
-            f"- **Taxa de sucesso:** {(sucessos/len(resultados)*100):.1f}%",
-            f"- **Agentes utilizados por modelo:** 3",
-            f"- **Total de execuções de agentes:** {len(resultados) * 3}",
-            ""
-        ])
-        
-        with open(caminho_consolidado, "w", encoding="utf-8") as arquivo:
-            arquivo.write("\n".join(linhas))
-        
-        print(f"📋 Relatório consolidado multi-agente salvo: {caminho_consolidado}")
 
 
 # =============================
@@ -1165,7 +1074,7 @@ def main():
     
     # Criar gerenciador multi-agente e executar
     gerenciador = GerenciadorEstudoCasoMultiAgente(servico_analise, gerador_relatorio)
-    gerenciador.executar_estudo_completo()
+    gerenciador.executar_estudo_completo('arquivo_estudo_1/texto_estudo_caso1.docx')
 
 
 if __name__ == "__main__":

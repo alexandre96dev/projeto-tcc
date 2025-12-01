@@ -13,6 +13,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional, Protocol, Tuple
 import json
+from dotenv import load_dotenv
 import os
 import re
 from datetime import datetime
@@ -24,6 +25,7 @@ from crewai.tools import BaseTool
 from pydantic import BaseModel, Field
 from docx import Document
 
+load_dotenv()
 # =============================
 # Tipos e Configurações (mantidos iguais)
 # =============================
@@ -146,7 +148,7 @@ class FabricaModelos:
         ModelType.LLAMA_7B: ConfiguracaoModelo(
             model_name="replicate/meta/meta-llama-3-8b-instruct",
             display_name="Llama 7B",
-            api_key=os.getenv("REPLICATE_API_TOKEN", "r8_MPjPwXOOQ4ZORa5teY6esvCY6AfJr2p1frYPn"),
+            api_key=os.getenv("REPLICATE_API_TOKEN"),
             temperature=0.1,
             max_tokens=8192,
             max_retries=3,
@@ -154,7 +156,7 @@ class FabricaModelos:
         ModelType.LLAMA_70B: ConfiguracaoModelo(
             model_name="replicate/meta/meta-llama-3-70b-instruct",
             display_name="Llama 70B",
-            api_key=os.getenv("REPLICATE_API_TOKEN", "r8_MPjPwXOOQ4ZORa5teY6esvCY6AfJr2p1frYPn"),
+            api_key=os.getenv("REPLICATE_API_TOKEN"),
             temperature=0.1,
             max_tokens=8192,
             max_retries=3,
@@ -162,7 +164,7 @@ class FabricaModelos:
         ModelType.CHATGPT: ConfiguracaoModelo(
             model_name="openai/gpt-4o-mini",
             display_name="ChatGPT 4o Mini",
-            api_key=os.getenv('OPENAI_API_KEY', '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')
+            api_key=os.getenv('OPENAI_API_KEY')
         )
     }
 
