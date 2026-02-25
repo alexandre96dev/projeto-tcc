@@ -29,7 +29,7 @@ load_dotenv()
 # =============================
 
 class ModelType(Enum):
-    LLAMA_7B = "llama_7b"
+    LLAMA_8B = "llama_8b"
     LLAMA_70B = "llama_70b"
     CHATGPT = "gpt"
 
@@ -422,9 +422,9 @@ class FabricaModelos:
     """Factory para criação de modelos de IA"""
     
     CONFIGURACOES_PADRAO = {
-        ModelType.LLAMA_7B: ConfiguracaoModelo(
+        ModelType.LLAMA_8B: ConfiguracaoModelo(
             model_name="replicate/meta/meta-llama-3-8b-instruct",
-            display_name="Llama 7B",
+            display_name="Llama 8B",
             api_key=os.getenv('REPLICATE_API_TOKEN')
         ),
         ModelType.LLAMA_70B: ConfiguracaoModelo(

@@ -147,7 +147,7 @@ class FabricaModelos:
     CONFIGURACOES_PADRAO = {
         ModelType.LLAMA_7B: ConfiguracaoModelo(
             model_name="replicate/meta/meta-llama-3-8b-instruct",
-            display_name="Llama 7B",
+            display_name="Llama 8B",
             api_key=os.getenv("REPLICATE_API_TOKEN"),
             temperature=0.1,
             max_tokens=8192,
