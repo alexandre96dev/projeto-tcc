@@ -264,17 +264,19 @@ class FabricaAgentesFinanceiros:
     
     @staticmethod
     def criar_agente_sintetizador(modelo: LLM) -> Agent:
-        """Agente 3: Especialista em síntese e recomendações executivas"""
+        """Agente 3: Especialista em síntese e recomendações analíticas"""
         return Agent(
-            role="Sintetizador Executivo",
+            role="Sintetizador Analítico",
             goal=(
-                "Consolidar análises financeiras em relatórios executivos claros, "
-                "com recomendações práticas e insights acionáveis para gestão."
+                "Consolidar análises financeiras em relatórios claros, objetivos e fiéis "
+                "aos dados, destacando padrões observáveis, variações relevantes e pontos "
+                "que merecem investigação adicional, sem extrapolar além da evidência disponível."
             ),
             backstory=(
-                "Consultor executivo especializado em traduzir análises técnicas "
-                "em insights estratégicos. Experiência em elaboração de relatórios "
-                "para alta gestão com foco em ações práticas e resultados."
+                "Analista especializado em transformar dados financeiros em relatórios "
+                "descritivos e consistentes, com foco em precisão, clareza e aderência "
+                "às informações presentes nos documentos analisados. Evita inferências "
+                "causais, recomendações normativas e metas sem base explícita nos dados."
             ),
             verbose=False,
             llm=modelo,
@@ -318,6 +320,7 @@ INSTRUÇÕES ESPECÍFICAS:
    - Resultado líquido (receitas - despesas)
    - Top 5 maiores gastos com valores
    - Período/mês de referência
+   - Margem percentual (resultado/receitas totais * 100)
 
 2. FORMATO DE SAÍDA OBRIGATÓRIO:
 ```json
@@ -338,10 +341,25 @@ INSTRUÇÕES ESPECÍFICAS:
 }}
 ```
 
-3. VALIDAÇÃO: Certifique-se que receitas - despesas = resultado para cada período.
-4. NÃO INVENTE dados que não estão nos documentos.
+3. VALIDAÇÕES OBRIGATÓRIAS:
+
+   Recalcule obrigatoriamente: resultado = receitas_total - despesas_total
+
+   Recalcule obrigatoriamente: margem_percent = (resultado / receitas_total) * 100
+
+   Se houver divergência entre valor encontrado e valor calculado, priorize o valor calculado
+
+   Não deixe campos numéricos sem conferência
+
+4. RESTRIÇÕES:
+
+    NÃO invente dados que não estejam nos documentos
+
+    NÃO estime valores ausentes
+
+    Se um dado não puder ser identificado com segurança, sinalize explicitamente
 """,
-            expected_output="JSON estruturado com dados financeiros extraídos de todos os documentos",
+            expected_output="JSON estruturado com dados financeiros extraídos e matematicamente validados",
             agent=agente_extrator,
         )
     
@@ -351,48 +369,76 @@ INSTRUÇÕES ESPECÍFICAS:
         
         return Task(
             description=f"""
-ANALISE os dados financeiros estruturados e identifique padrões, tendências e oportunidades.
+ANALISE os dados financeiros estruturados e identifique padrões observáveis, variações e pontos que merecem investigação adicional.
 
 DADOS EXTRAÍDOS PARA ANÁLISE:
 {dados_extraidos}
 
 ANÁLISES OBRIGATÓRIAS:
 
-1. **EVOLUÇÃO TEMPORAL**:
-   - Compare receitas, despesas e resultados entre períodos
-   - Identifique melhor e pior período (margem %)
-   - Calcule variação percentual entre períodos
+1. EVOLUÇÃO TEMPORAL:
 
-2. **PADRÕES DE GASTOS**:
-   - Gastos que aparecem em todos os períodos (recorrentes)
-   - Categorias com maior variação entre períodos
-   - Ranking dos 5 maiores gastos consolidados
+    - Compare receitas, despesas, resultados e margens entre períodos
 
-3. **TENDÊNCIAS E CORRELAÇÕES**:
-   - Tendência geral (crescimento/declínio/estabilidade)
-   - Sazonalidade ou padrões específicos
-   - Correlação entre receitas e tipos de gastos
+    - Identifique melhor e pior período com base nos valores observados
 
-4. **OPORTUNIDADES DE OTIMIZAÇÃO**:
-   - Gastos com maior potencial de redução
-   - Categorias com crescimento desproporcional
-   - Ineficiências operacionais identificadas
+    - Calcule variação percentual entre períodos consecutivos
+
+    - Apresente os períodos em ordem cronológica
+
+2. PADRÕES DE GASTOS:
+
+    - Identifique gastos recorrentes (presentes em todos ou quase todos os períodos)
+
+    - Identifique categorias com maior oscilação de valor
+
+    - Monte um ranking consolidado dos maiores gastos
+
+3. COMPORTAMENTO DOS DADOS:
+
+    - Classifique o comportamento como crescimento, queda, estabilidade ou oscilação
+
+    - Só use "tendência" se houver consistência ao longo da série
+
+    - Se o comportamento for irregular, use termos como "oscilação" ou "variação pontual"
+
+4. PONTOS DE ATENÇÃO:
+
+    - Destaque categorias relevantes pelo peso financeiro ou pela variação observada
+
+    - Indique apenas pontos que merecem investigação adicional
+
+    - NÃO atribua causas
+
+    - NÃO afirme ineficiência, desperdício, excesso ou falha de gestão sem evidência explícita
+
+    - NÃO proponha metas percentuais de redução
+
+    - NÃO recomende cortes ou renegociações como se fossem conclusões comprovadas
 
 FORMATO DE SAÍDA:
-Análise estruturada em texto claro, destacando insights quantitativos e qualitativos.
-NÃO repita os dados brutos - ANALISE e INTERPRETE.
+Análise estruturada em texto claro, separando:
+
+ - Observações diretamente suportadas pelos dados
+
+ - Interpretações possíveis, quando houver, marcadas explicitamente como hipótese
+
+ - Pontos que merecem investigação adicional
+
+NÃO repita os dados brutos.
+NÃO extrapole além da evidência disponível.
 """,
-            expected_output="Análise detalhada com insights, padrões e oportunidades identificadas",
+            expected_output="Análise descritiva estruturada, fiel aos dados, com observações e pontos de atenção sem extrapolação causal",
             agent=agente_analista,
         )
     
     @staticmethod
     def criar_tarefa_sintese(dados_extraidos: str, analise_realizada: str, agente_sintetizador: Agent) -> Task:
-        """Tarefa 3: Consolidar em relatório executivo final"""
+        """Tarefa 3: Consolidar em relatório analítico final"""
         
         return Task(
             description=f"""
-CONSOLIDE os dados e análises em um relatório executivo final para gestão.
+CONSOLIDE os dados e análises em um relatório final claro, objetivo e fiel aos balancetes.
 
 DADOS FINANCEIROS:
 {dados_extraidos}
@@ -400,47 +446,69 @@ DADOS FINANCEIROS:
 ANÁLISE REALIZADA:
 {analise_realizada}
 
+REGRAS OBRIGATÓRIAS:
+
+1. Use apenas informações explicitamente presentes nos dados extraídos ou derivadas por cálculo direto
+
+2. Reapresente os períodos em ordem cronológica
+
+3. Não atribua causas, desperdícios, ineficiências ou falhas de gestão sem evidência documental explícita
+
+4. Não proponha metas percentuais de redução, economia ou ganho
+
+5. Não transforme observações contábeis em recomendações normativas
+
+6. Quando houver interpretação não comprovada diretamente, sinalize como hipótese ou ponto para investigação
+
+7. Mantenha linguagem técnica, descritiva e cautelosa
+
 RELATÓRIO FINAL OBRIGATÓRIO - FORMATO MARKDOWN:
 
 # Análise Financeira Comparativa - Estudo de Caso 2
 
 ## 📊 Resumo Executivo
-[Síntese das principais descobertas em 3-4 frases]
+[Síntese descritiva das principais variações e padrões observáveis em 3-4 frases]
 
 ## 📋 Dados Consolidados
 | Período | Receitas | Despesas | Resultado | Margem % |
 |---------|----------|----------|-----------|----------|
-[Tabela com TODOS os períodos analisados]
+[Tabela com TODOS os períodos analisados em ordem cronológica]
 
-## 💰 Principais Insights
+Principais Achados
+1. Performance por Período
 
-### 1. Performance por Período
-- **Melhor período**: [Qual e por quê]
-- **Pior período**: [Qual e por quê]
-- **Variação geral**: [Tendência observada]
+ - Melhor período: [Qual, com base em resultado e/ou margem]
 
-### 2. Padrões de Gastos
-- **Top 5 gastos recorrentes**: [Lista consolidada]
-- **Maior variação**: [Categoria com maior oscilação]
-- **Gastos em crescimento**: [Tendências preocupantes]
+ - Pior período: [Qual, com base em resultado e/ou margem]
 
-### 3. Oportunidades Identificadas
-- **Otimização imediata**: [1-2 ações de curto prazo]
-- **Eficiência operacional**: [Melhorias de processo]
-- **Controle de custos**: [Categorias prioritárias]
+ - Comportamento geral: [Oscilação, estabilidade, crescimento ou queda, conforme os dados]
 
-## 🎯 Recomendações Executivas
-1. [Ação específica com resultado esperado]
-2. [Ação específica com resultado esperado]
-3. [Ação específica com resultado esperado]
+2. Padrões de Gastos
 
-## 📈 Próximos Passos
-[2-3 ações para implementação]
+ - Gastos recorrentes: [Categorias que se repetem]
+
+ - Maior oscilação: [Categoria com maior variação observada]
+
+ - Categorias relevantes: [Categorias com maior peso financeiro]
+
+3. Pontos para Investigação
+
+  - [Aspecto que merece análise adicional]
+
+  - [Aspecto que merece análise adicional]
+
+  - [Aspecto que merece análise adicional]
+
+Limitações da Análise
+
+[Registrar que as conclusões se baseiam apenas nos balancetes analisados]
+
+[Informar que não é possível inferir causas ou recomendar ações específicas sem dados complementares]
 
 ---
 *Relatório baseado na análise de [X] períodos financeiros*
 """,
-            expected_output="Relatório executivo completo em formato Markdown",
+            expected_output="Relatório final em Markdown, descritivo, cronológico e fiel aos dados, sem extrapolações causais ou normativas",
             agent=agente_sintetizador,
         )
 
